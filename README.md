@@ -5,6 +5,7 @@
 
 - 전체 설계·로드맵: [docs/coupon-system-roadmap.md](docs/coupon-system-roadmap.md)
 - 실험 리포트: [docs/reports/](docs/reports/)
+- Phase 회고 (블로그 포스팅용): [docs/retrospectives/](docs/retrospectives/)
 
 ## 스택
 
@@ -26,7 +27,7 @@ Grafana: http://localhost:3000 · Prometheus: http://localhost:9090
 
 | Phase | 내용 | 상태 |
 |---|---|---|
-| 0 | 기반 공사 (인프라, CI, AI 하네스) | ✅ |
+| 0 | 기반 공사 (인프라, CI, AI 하네스) | ✅ [회고](docs/retrospectives/phase-0-기반공사.md) |
 | 1 | 정직한 MVP — 비관적 락 baseline, HikariCP/explain 실험 | 🔄 기능 완료, 측정 진행 중 |
 | 2 | Redis 재고 차감 3전략 비교 | ⏳ |
 | 3 | 비동기 알림 + WebFlux/Netty 전환 | ⏳ |

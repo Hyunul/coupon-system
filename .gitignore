@@ -19,6 +19,7 @@ bin/
 # Load test outputs
 k6-results/
 
-# OMC / Claude local state
+# OMC / Claude local state (프로젝트 스킬은 커밋 대상)
 .omc/
-.claude/
+.claude/*
+!.claude/skills/

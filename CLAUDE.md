@@ -47,6 +47,7 @@ k6 run k6/scenarios/smoke.js                            # 기능 스모크
 - k6 결과(`k6-results/`)는 gitignore — 수치는 리포트에 옮겨 적는다.
 - 부하테스트의 정상 응답 집합: 201(발급) / 409(SOLD_OUT·DUPLICATE). 5xx나 타임아웃만 실패로 계산.
 - 커밋 메시지: 한국어 요약 1줄 + 필요 시 본문. Phase 태그 권장 (예: `[P1] 발급 API 비관적 락 구현`).
+- **모든 Phase의 종료 조건에 회고 작성이 포함된다**: Phase를 마무리할 때 반드시 `/phase-retrospective` 스킬을 실행해 `docs/retrospectives/`에 블로그 포스팅용 회고(문제 상황 → 해결 과정(대안 기술 비교표) → 결과 수치 → 배운 점)를 작성하고 README 진행 표를 갱신한다.
 
 ## AI 작업 시 주의
 
