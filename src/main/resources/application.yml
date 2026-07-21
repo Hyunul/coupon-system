@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: coupon-api
+  datasource:
+    url: jdbc:mysql://localhost:13306/coupon?connectionTimeZone=UTC&rewriteBatchedStatements=true
+    username: coupon
+    password: coupon
+    hikari:
+      maximum-pool-size: 20   # Phase 1 실험 대상: -Dspring.datasource.hikari.maximum-pool-size=N 으로 재정의
+  jpa:
+    hibernate:
+      ddl-auto: validate      # 스키마는 Flyway가 관리
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+server:
+  tomcat:
+    mbeanregistry:
+      enabled: true           # tomcat.threads.* 메트릭 노출에 필수
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus

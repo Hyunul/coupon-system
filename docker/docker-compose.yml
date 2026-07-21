@@ -1,0 +1,76 @@
+name: coupon-system
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: coupon-mysql
+    ports:
+      - "13306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: coupon
+      MYSQL_USER: coupon
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-coupon}
+    command:
+      - --default-time-zone=+00:00
+    volumes:
+      # named volume 필수: Windows bind mount는 I/O가 느려 측정을 왜곡한다
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: coupon-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: coupon-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    container_name: coupon-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      # 로컬 전용: 익명 접근 허용
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+
+  mock-notify:
+    build: ./mock-notify
+    container_name: coupon-mock-notify
+    ports:
+      - "8090:8090"
+    environment:
+      DEFAULT_DELAY_MS: "0"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8090/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mysql-data:

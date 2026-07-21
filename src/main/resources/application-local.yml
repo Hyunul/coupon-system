@@ -1,0 +1,4 @@
+# 로컬 개발 편의 프로파일: --spring.profiles.active=local
+logging:
+  level:
+    org.hibernate.SQL: debug

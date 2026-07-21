@@ -1,0 +1,14 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  # 앱은 호스트에서 gradlew bootRun으로 실행되므로 host.docker.internal로 스크레이프
+  - job_name: coupon-api
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
