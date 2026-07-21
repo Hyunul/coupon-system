@@ -1,0 +1,96 @@
+{
+  "uid": "coupon-phase1",
+  "title": "Coupon Phase 1 — Baseline",
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "refresh": "5s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "발급 API RPS (status별)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (rate(http_server_requests_seconds_count{uri=\"/api/v1/events/{eventId}/issues\"}[15s]))",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "발급 API 지연 p95 / p99",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{uri=\"/api/v1/events/{eventId}/issues\"}[30s])))",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{uri=\"/api/v1/events/{eventId}/issues\"}[30s])))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "HikariCP 커넥션 (active / pending / idle)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "none" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "hikaricp_connections_active{pool=\"HikariPool-1\"}", "legendFormat": "active" },
+        { "refId": "B", "expr": "hikaricp_connections_pending{pool=\"HikariPool-1\"}", "legendFormat": "pending" },
+        { "refId": "C", "expr": "hikaricp_connections_idle{pool=\"HikariPool-1\"}", "legendFormat": "idle" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "HikariCP 타임아웃 발생률 (/s)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "rate(hikaricp_connections_timeout_total{pool=\"HikariPool-1\"}[1m])", "legendFormat": "timeouts/s" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Tomcat 스레드 (busy / current / max)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "none" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "tomcat_threads_busy_threads", "legendFormat": "busy" },
+        { "refId": "B", "expr": "tomcat_threads_current_threads", "legendFormat": "current" },
+        { "refId": "C", "expr": "tomcat_threads_config_max_threads", "legendFormat": "max" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "JVM Heap 사용량 / GC pause",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [
+        { "matcher": { "id": "byName", "options": "GC pause (s/s)" }, "properties": [ { "id": "unit", "value": "s" } ] }
+      ] },
+      "targets": [
+        { "refId": "A", "expr": "sum(jvm_memory_used_bytes{area=\"heap\"})", "legendFormat": "heap used" },
+        { "refId": "B", "expr": "rate(jvm_gc_pause_seconds_sum[1m])", "legendFormat": "GC pause (s/s)" }
+      ]
+    }
+  ]
+}

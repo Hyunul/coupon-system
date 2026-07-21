@@ -11,9 +11,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
+# MYSQL_PWD 사용: 커맨드라인 비밀번호 경고(stderr)가 PS 5.1에서 NativeCommandError로 승격되는 것을 방지
 $mysqlExec = { param($sqlFile)
     Get-Content (Join-Path $root "scripts\$sqlFile") -Raw |
-        docker exec -i coupon-mysql mysql -ucoupon -pcoupon coupon
+        docker exec -i -e MYSQL_PWD=coupon coupon-mysql mysql -ucoupon coupon
 }
 
 # 1) 리셋 + 시드
@@ -31,14 +32,17 @@ $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $summaryPath = Join-Path $resultDir "$Scenario-$stamp.json"
 
 Write-Host "[2/3] k6 run $Scenario" -ForegroundColor Cyan
+# k6는 개별 요청 실패를 stderr 경고로 남긴다 — PS 5.1이 이를 에러로 승격해 런을 죽이지 않도록 잠시 완화
+$ErrorActionPreference = "Continue"
 k6 run --summary-export "$summaryPath" @K6Args (Join-Path $root "k6\scenarios\$Scenario.js")
 $k6Exit = $LASTEXITCODE
+$ErrorActionPreference = "Stop"
 Write-Host "k6 summary: $summaryPath (exit=$k6Exit; threshold 실패는 baseline에서 정상)"
 
 # 3) 정합성 검증 — over_issued / duplicated / qty_mismatch 모두 0 이어야 함
 Write-Host "[3/3] 정합성 검증" -ForegroundColor Cyan
 $verify = Get-Content (Join-Path $root "scripts\verify-consistency.sql") -Raw |
-    docker exec -i coupon-mysql mysql -ucoupon -pcoupon coupon -N -B
+    docker exec -i -e MYSQL_PWD=coupon coupon-mysql mysql -ucoupon coupon -N -B
 $values = ($verify -split "\s+") | Where-Object { $_ -ne "" }
 $over = [int]$values[0]; $dup = [int]$values[1]; $mismatch = [int]$values[2]
 Write-Host ("over_issued={0} duplicated={1} qty_mismatch={2}" -f $over, $dup, $mismatch)
