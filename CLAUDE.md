@@ -5,9 +5,9 @@
 
 ## 현재 상태
 
-- **Phase 1 진행 중** (정직한 MVP: Spring MVC + MySQL 비관적 락)
-- 1주차(기능) 완료, 2주차(측정: baseline, HikariCP 실험, explain 튜닝) 남음
-- 다음 Phase: Redis 3전략 비교 (`IssueStrategy` 구현체 추가 방식)
+- **Phase 1 완료** — baseline(5,000rps 스파이크 실패 99.15%, 원인: 행 락→스레드→TCP 연쇄), HikariCP 최적 20, V3 인덱스로 이력 조회 43rps→300rps. 리포트 3편 + 회고 작성됨.
+- **다음: Phase 2** — `IssueStrategy`에 Redisson 분산락·Redis Lua 구현체 추가, 동일 k6 시나리오로 3전략 비교, Caffeine 조회 캐시, 정합성 검증 CI 편입
+- HikariCP 기본값은 pool=20 유지 (실험 근거: docs/reports/phase1-hikari-experiment.md)
 
 ## 아키텍처 (현재형)
 

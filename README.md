@@ -28,8 +28,8 @@ Grafana: http://localhost:3000 · Prometheus: http://localhost:9090
 | Phase | 내용 | 상태 |
 |---|---|---|
 | 0 | 기반 공사 (인프라, CI, AI 하네스) | ✅ [회고](docs/retrospectives/phase-0-기반공사.md) |
-| 1 | 정직한 MVP — 비관적 락 baseline, HikariCP/explain 실험 | 🔄 기능 완료, 측정 진행 중 |
-| 2 | Redis 재고 차감 3전략 비교 | ⏳ |
+| 1 | 정직한 MVP — 비관적 락 baseline, HikariCP/explain 실험 | ✅ [회고](docs/retrospectives/phase-1-정직한-mvp.md) |
+| 2 | Redis 재고 차감 3전략 비교 | 🔜 다음 |
 | 3 | 비동기 알림 + WebFlux/Netty 전환 | ⏳ |
 | 4 | JVM/GC 튜닝, 장애 훈련(tcpdump) | ⏳ |
 | 5 | 실배포·고가용성 운영 | ⏳ |
