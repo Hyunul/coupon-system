@@ -45,3 +45,9 @@ tasks.withType<Test> {
     // 런타임(main의 TimeZone.setDefault)과 동일하게 테스트도 UTC로 고정
     systemProperty("user.timezone", "UTC")
 }
+
+// GC 실험용 JVM 옵션 주입: .\gradlew.bat bootRun -PbootJvmArgs="-Xms2g -Xmx2g -Xlog:gc*:file=..."
+// (JAVA_TOOL_OPTIONS는 Gradle 데몬까지 오염시키므로 bootRun 태스크에만 적용)
+tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
+    (findProperty("bootJvmArgs") as String?)?.let { jvmArgs = it.split(" ") }
+}
