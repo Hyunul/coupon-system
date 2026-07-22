@@ -1,5 +1,6 @@
 package com.chironsoft.coupon.application.issue;
 
+import com.chironsoft.coupon.AbstractIntegrationTest;
 import com.chironsoft.coupon.common.BusinessException;
 import com.chironsoft.coupon.common.ErrorCode;
 import com.chironsoft.coupon.domain.CouponEvent;
@@ -10,12 +11,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -32,15 +29,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 비관적 락 발급의 정합성 검증 (Testcontainers MySQL).
  * 초과 발급 0건 / 중복 발급 0건이 이 프로젝트의 핵심 불변식이다.
  */
-@SpringBootTest
-@Testcontainers
-class PessimisticLockIssueStrategyTest {
-
-    @Container
-    @ServiceConnection
-    static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0");
+class PessimisticLockIssueStrategyTest extends AbstractIntegrationTest {
 
     @Autowired
+    @Qualifier("pessimisticStrategy")
     IssueStrategy issueStrategy;
 
     @Autowired

@@ -21,6 +21,14 @@ $mysqlExec = { param($sqlFile)
 if (-not $NoReset) {
     Write-Host "[1/3] reset + seed" -ForegroundColor Cyan
     & $mysqlExec "seed-event.sql"
+    # PATCH OPEN: Redis 재고/캐시 초기화 경로를 태운다 (redisson/lua 전략 필수, pessimistic 무해)
+    try {
+        Invoke-RestMethod -Method Patch -Uri "http://localhost:8080/api/v1/events/1/status" `
+            -ContentType "application/json" -Body '{"status":"OPEN"}' | Out-Null
+    } catch {
+        Write-Host "PATCH OPEN 실패 — 앱이 8080에서 실행 중인지 확인" -ForegroundColor Red
+        exit 1
+    }
 } else {
     Write-Host "[1/3] reset 건너뜀 (-NoReset)" -ForegroundColor Yellow
 }

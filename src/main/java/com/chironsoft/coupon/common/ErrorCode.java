@@ -7,6 +7,7 @@ public enum ErrorCode {
     NOT_OPEN(HttpStatus.BAD_REQUEST, "발급 가능한 상태가 아닙니다."),
     SOLD_OUT(HttpStatus.CONFLICT, "쿠폰이 모두 소진되었습니다."),
     DUPLICATE_ISSUE(HttpStatus.CONFLICT, "이미 발급받은 사용자입니다."),
+    LOCK_TIMEOUT(HttpStatus.SERVICE_UNAVAILABLE, "요청이 몰려 처리하지 못했습니다. 다시 시도해주세요."),
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "요청이 올바르지 않습니다.");
 
     private final HttpStatus status;

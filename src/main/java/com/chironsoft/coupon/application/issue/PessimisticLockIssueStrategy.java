@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 
-@Component
+@Component("pessimisticStrategy")
 public class PessimisticLockIssueStrategy implements IssueStrategy {
 
     private final CouponEventRepository eventRepository;
