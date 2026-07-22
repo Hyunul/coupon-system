@@ -5,9 +5,11 @@
 
 ## 현재 상태
 
-- **Phase 1 완료** — baseline(5,000rps 스파이크 실패 99.15%, 원인: 행 락→스레드→TCP 연쇄), HikariCP 최적 20, V3 인덱스로 이력 조회 43rps→300rps. 리포트 3편 + 회고 작성됨.
-- **다음: Phase 2** — `IssueStrategy`에 Redisson 분산락·Redis Lua 구현체 추가, 동일 k6 시나리오로 3전략 비교, Caffeine 조회 캐시, 정합성 검증 CI 편입
+- **Phase 2 완료** — 3전략 스파이크 비교: lua가 발급 응답 12s→34ms(354배)·정상 처리 3.1배, redisson은 락 이동으로 오히려 악화(절반). 정합성 3전략 모두 0/0/0. 리포트+회고 작성됨.
+- **다음: Phase 3** — 동기 알림(mock-notify 3s 지연)으로 장애 전파 재현 → Redis Stream + notify-worker 분리(멀티모듈 전환 시점) + WebClient → WebFlux/Netty+R2DBC 전환 비교
+- 발급 전략은 `--coupon.issue.strategy=pessimistic|redisson|lua`로 선택 (기본 pessimistic — lua 기본 전환은 Phase 3에서 이력 INSERT 비동기 분리 후. 근거: docs/reports/phase2-strategy-comparison.md)
 - HikariCP 기본값은 pool=20 유지 (실험 근거: docs/reports/phase1-hikari-experiment.md)
+- redis 전략은 시드 후 `PATCH /api/v1/events/1/status {OPEN}`으로 Redis 재고 초기화 필요 (run-loadtest.ps1이 자동 수행)
 
 ## 아키텍처 (현재형)
 
