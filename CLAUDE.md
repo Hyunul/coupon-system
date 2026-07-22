@@ -6,8 +6,10 @@
 ## 현재 상태
 
 - **Phase 2 완료** — 3전략 스파이크 비교: lua가 발급 응답 12s→34ms(354배)·정상 처리 3.1배, redisson은 락 이동으로 오히려 악화(절반). 정합성 3전략 모두 0/0/0. 리포트+회고 작성됨.
-- **Phase 3 완료** — 3a 동기 알림 붕괴 재현(3s 지연→p95 35.9s), 3b Stream 워커 분리(같은 지연 p95 3ms), 3c Netty 비교(극적 역전 없음 — 꼬리 거동만 우위: 타임아웃 100→0, 드랍 −42%). 리포트 3편 + 회고 작성됨.
-- **다음: Phase 4** — GC 튜닝(G1 vs ZGC, -Xlog:gc*), 장애 훈련 1~5(tcpdump: 풀 고갈·TIME_WAIT·타임아웃 미설정 — WSL2/컨테이너 내부에서 수행), 포스트모템 3~4편. 잔여 과제: 알림 재시도 큐·XAUTOCLAIM, "Netty가 이기는 조건" 실증(3a 시나리오를 reactive로 재현)
+- **Phase 4 완료** — GC: heap 2g 고정으로 p95 158→2.6ms(pause 191→26회), ZGC는 추가 이득 미미. 장애 훈련 3건 + 포스트모템 3편(docs/postmortems/): 풀 고갈(SYN 1건 패킷 증명), 타임아웃 미설정(reactor-netty 기본 10s가 용량 결정 — 스레드덤프 증거), maxclients(기동 불능 + 2단계 복구). 리포트+회고 작성됨.
+- **다음: Phase 5** — AWS 크레딧 실배포(Nginx+앱 2대), 무중단 배포, chaos(인스턴스 강제 종료), Prometheus 알림 규칙(pending·rejected_connections·지연 기반), k6 성능 회귀 CI 게이트. 이월: TIME_WAIT·패킷 유실 훈련(Nginx/tc 필요), 알림 재시도 큐·XAUTOCLAIM, Netty 우위 조건 실증
+- 패킷 캡처는 netshoot 사이드카 사용: `docker run --rm --net container:<이름> nicolaka/netshoot tcpdump ...`
+- GC 실험: `bash scripts/gc-experiment.sh "default g1tuned zgc"` (JVM 옵션은 -PbootJvmArgs, 로그 경로는 공백 때문에 반드시 상대 경로)
 - reactive(Netty) 실행: `.\gradlew.bat bootRun --args='--spring.profiles.active=reactive'` (핫패스 논블로킹, 이력 R2DBC). JDBC+R2DBC 공존 함정은 config/DataSourceConfig 주석 참조
 - 비동기 측정: `bash scripts/stream-async-experiment.sh` / Tomcat vs Netty: `bash scripts/tomcat-vs-netty-experiment.sh servlet|reactive`
 - 발급 전략은 `--coupon.issue.strategy=pessimistic|redisson|lua`로 선택 (기본 pessimistic — lua 기본 전환은 Phase 3에서 이력 INSERT 비동기 분리 후. 근거: docs/reports/phase2-strategy-comparison.md)

@@ -31,6 +31,6 @@ Grafana: http://localhost:3000 · Prometheus: http://localhost:9090
 | 1 | 정직한 MVP — 비관적 락 baseline, HikariCP/explain 실험 | ✅ [회고](docs/retrospectives/phase-1-정직한-mvp.md) |
 | 2 | Redis 재고 차감 3전략 비교 | ✅ [회고](docs/retrospectives/phase-2-redis-3전략.md) |
 | 3 | 비동기 알림 + WebFlux/Netty 전환 | ✅ [회고](docs/retrospectives/phase-3-비동기와-netty.md) |
-| 4 | JVM/GC 튜닝, 장애 훈련(tcpdump) | 🔜 다음 |
-| 5 | 실배포·고가용성 운영 | ⏳ |
+| 4 | JVM/GC 튜닝, 장애 훈련(tcpdump) | ✅ [회고](docs/retrospectives/phase-4-저수준-튜닝.md) |
+| 5 | 실배포·고가용성 운영 | 🔜 다음 |
 | 6 | AI 하네스 체계화 (MCP, skills, hooks) | ⏳ |
