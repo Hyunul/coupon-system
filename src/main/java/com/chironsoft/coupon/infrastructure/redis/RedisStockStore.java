@@ -19,14 +19,23 @@ public class RedisStockStore {
     public static final String SOLD_OUT = "SOLD_OUT";
     public static final String DUPLICATE = "DUPLICATE";
 
+    public static final String STREAM_KEY = "stream:issue";
+
     private final StringRedisTemplate redis;
     private final DefaultRedisScript<String> issueScript;
+    private final DefaultRedisScript<String> issueStreamScript;
 
     public RedisStockStore(StringRedisTemplate redis) {
         this.redis = redis;
-        this.issueScript = new DefaultRedisScript<>();
-        this.issueScript.setScriptSource(new ResourceScriptSource(new ClassPathResource("redis/issue.lua")));
-        this.issueScript.setResultType(String.class);
+        this.issueScript = script("redis/issue.lua");
+        this.issueStreamScript = script("redis/issue-stream.lua");
+    }
+
+    private static DefaultRedisScript<String> script(String path) {
+        DefaultRedisScript<String> s = new DefaultRedisScript<>();
+        s.setScriptSource(new ResourceScriptSource(new ClassPathResource(path)));
+        s.setResultType(String.class);
+        return s;
     }
 
     public static String stockKey(Long eventId) {
@@ -48,6 +57,13 @@ public class RedisStockStore {
         return redis.execute(issueScript,
                 List.of(stockKey(eventId), issuedKey(eventId)),
                 String.valueOf(userId));
+    }
+
+    /** Phase 3b: 검사+차감+등록+XADD(발급 이벤트 발행)까지 원자 실행. DB 기록은 워커가 소비 */
+    public String issueAtomicallyWithStream(Long eventId, Long userId, String issuedAtIso) {
+        return redis.execute(issueStreamScript,
+                List.of(stockKey(eventId), issuedKey(eventId), STREAM_KEY),
+                String.valueOf(userId), String.valueOf(eventId), issuedAtIso);
     }
 
     /** Redisson 전략용 비원자 연산들 — 분산락 안에서만 호출할 것 */

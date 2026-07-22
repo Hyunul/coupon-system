@@ -6,7 +6,8 @@
 ## 현재 상태
 
 - **Phase 2 완료** — 3전략 스파이크 비교: lua가 발급 응답 12s→34ms(354배)·정상 처리 3.1배, redisson은 락 이동으로 오히려 악화(절반). 정합성 3전략 모두 0/0/0. 리포트+회고 작성됨.
-- **다음: Phase 3** — 동기 알림(mock-notify 3s 지연)으로 장애 전파 재현 → Redis Stream + notify-worker 분리(멀티모듈 전환 시점) + WebClient → WebFlux/Netty+R2DBC 전환 비교
+- **Phase 3 진행 중** — 3a/3b 완료: 동기 알림 3s 지연 → p95 35.9s 붕괴 재현 후, Lua XADD + worker 프로파일(XREADGROUP→DB INSERT→WebClient 알림)로 분리해 같은 지연에서 p95 3ms·드레인 후 대사 일치 (docs/reports/phase3-async-notify.md). **남은 것: WebFlux/Netty+R2DBC 전환 비교(3c), 알림 재시도 큐·XAUTOCLAIM**. 회고는 3c 완료 후 작성.
+- 비동기 측정 실행법: `bash scripts/stream-async-experiment.sh` (api 8080 + worker 8081 동시 기동)
 - 발급 전략은 `--coupon.issue.strategy=pessimistic|redisson|lua`로 선택 (기본 pessimistic — lua 기본 전환은 Phase 3에서 이력 INSERT 비동기 분리 후. 근거: docs/reports/phase2-strategy-comparison.md)
 - HikariCP 기본값은 pool=20 유지 (실험 근거: docs/reports/phase1-hikari-experiment.md)
 - redis 전략은 시드 후 `PATCH /api/v1/events/1/status {OPEN}`으로 Redis 재고 초기화 필요 (run-loadtest.ps1이 자동 수행)

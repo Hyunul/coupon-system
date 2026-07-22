@@ -6,6 +6,7 @@ import com.chironsoft.coupon.common.ErrorCode;
 import com.chironsoft.coupon.domain.CouponIssue;
 import com.chironsoft.coupon.infrastructure.CouponIssueRepository;
 import com.chironsoft.coupon.infrastructure.redis.RedisStockStore;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
@@ -23,13 +24,16 @@ public class LuaScriptIssueStrategy implements IssueStrategy {
     private final CouponEventMetaCache metaCache;
     private final RedisStockStore stockStore;
     private final CouponIssueRepository issueRepository;
+    private final boolean streamMode;
 
     public LuaScriptIssueStrategy(CouponEventMetaCache metaCache,
                                   RedisStockStore stockStore,
-                                  CouponIssueRepository issueRepository) {
+                                  CouponIssueRepository issueRepository,
+                                  @Value("${coupon.record.mode:sync}") String recordMode) {
         this.metaCache = metaCache;
         this.stockStore = stockStore;
         this.issueRepository = issueRepository;
+        this.streamMode = "stream".equals(recordMode);
     }
 
     @Override
@@ -39,7 +43,9 @@ public class LuaScriptIssueStrategy implements IssueStrategy {
             throw new BusinessException(ErrorCode.NOT_OPEN);
         }
 
-        String result = stockStore.issueAtomically(eventId, userId);
+        String result = streamMode
+                ? stockStore.issueAtomicallyWithStream(eventId, userId, now.toString())
+                : stockStore.issueAtomically(eventId, userId);
         switch (result) {
             case RedisStockStore.SOLD_OUT -> throw new BusinessException(ErrorCode.SOLD_OUT);
             case RedisStockStore.DUPLICATE -> throw new BusinessException(ErrorCode.DUPLICATE_ISSUE);
@@ -47,6 +53,11 @@ public class LuaScriptIssueStrategy implements IssueStrategy {
             default -> throw new IllegalStateException("unexpected lua result: " + result);
         }
 
+        if (streamMode) {
+            // 임계 경로에서 DB 완전 제거 — 이력 INSERT는 워커가 Stream을 소비하며 수행 (at-least-once,
+            // 중복 소비는 uk_event_user가 무해화). 응답의 issueId는 null (기록은 최종적 일관성).
+            return new CouponIssue(eventId, userId, now);
+        }
         try {
             return issueRepository.save(new CouponIssue(eventId, userId, now));
         } catch (DataIntegrityViolationException e) {

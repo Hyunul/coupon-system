@@ -1,0 +1,9 @@
+# notify-worker 역할 프로파일: 같은 아티팩트를 별도 프로세스로 실행한다
+#   .\gradlew.bat bootRun --args='--spring.profiles.active=worker'
+# 모듈 분리 대신 프로파일 역할 분리를 택함 — 근거는 phase3 리포트/회고 참조
+server:
+  port: 8081          # 관리/헬스체크용 (api는 8080)
+
+spring:
+  flyway:
+    enabled: false    # 마이그레이션은 api 프로세스가 담당
