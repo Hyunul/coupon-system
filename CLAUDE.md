@@ -6,8 +6,10 @@
 ## 현재 상태
 
 - **Phase 2 완료** — 3전략 스파이크 비교: lua가 발급 응답 12s→34ms(354배)·정상 처리 3.1배, redisson은 락 이동으로 오히려 악화(절반). 정합성 3전략 모두 0/0/0. 리포트+회고 작성됨.
-- **Phase 3 진행 중** — 3a/3b 완료: 동기 알림 3s 지연 → p95 35.9s 붕괴 재현 후, Lua XADD + worker 프로파일(XREADGROUP→DB INSERT→WebClient 알림)로 분리해 같은 지연에서 p95 3ms·드레인 후 대사 일치 (docs/reports/phase3-async-notify.md). **남은 것: WebFlux/Netty+R2DBC 전환 비교(3c), 알림 재시도 큐·XAUTOCLAIM**. 회고는 3c 완료 후 작성.
-- 비동기 측정 실행법: `bash scripts/stream-async-experiment.sh` (api 8080 + worker 8081 동시 기동)
+- **Phase 3 완료** — 3a 동기 알림 붕괴 재현(3s 지연→p95 35.9s), 3b Stream 워커 분리(같은 지연 p95 3ms), 3c Netty 비교(극적 역전 없음 — 꼬리 거동만 우위: 타임아웃 100→0, 드랍 −42%). 리포트 3편 + 회고 작성됨.
+- **다음: Phase 4** — GC 튜닝(G1 vs ZGC, -Xlog:gc*), 장애 훈련 1~5(tcpdump: 풀 고갈·TIME_WAIT·타임아웃 미설정 — WSL2/컨테이너 내부에서 수행), 포스트모템 3~4편. 잔여 과제: 알림 재시도 큐·XAUTOCLAIM, "Netty가 이기는 조건" 실증(3a 시나리오를 reactive로 재현)
+- reactive(Netty) 실행: `.\gradlew.bat bootRun --args='--spring.profiles.active=reactive'` (핫패스 논블로킹, 이력 R2DBC). JDBC+R2DBC 공존 함정은 config/DataSourceConfig 주석 참조
+- 비동기 측정: `bash scripts/stream-async-experiment.sh` / Tomcat vs Netty: `bash scripts/tomcat-vs-netty-experiment.sh servlet|reactive`
 - 발급 전략은 `--coupon.issue.strategy=pessimistic|redisson|lua`로 선택 (기본 pessimistic — lua 기본 전환은 Phase 3에서 이력 INSERT 비동기 분리 후. 근거: docs/reports/phase2-strategy-comparison.md)
 - HikariCP 기본값은 pool=20 유지 (실험 근거: docs/reports/phase1-hikari-experiment.md)
 - redis 전략은 시드 후 `PATCH /api/v1/events/1/status {OPEN}`으로 Redis 재고 초기화 필요 (run-loadtest.ps1이 자동 수행)
