@@ -9,8 +9,16 @@ spring:
     redis:
       host: localhost
       port: 6379
+      repositories:
+        enabled: false   # Redis는 Template/Lua만 사용 — 불필요한 리포지토리 스캔 제거
   datasource:
     url: jdbc:mysql://localhost:13306/coupon?connectionTimeZone=UTC&rewriteBatchedStatements=true
+    username: coupon
+    password: coupon
+  # R2DBC는 reactive 프로파일의 이력 조회에서만 실제 사용되지만,
+  # 드라이버가 클래스패스에 있으면 자동구성이 URL을 요구하므로 기본값을 항상 제공한다
+  r2dbc:
+    url: r2dbc:mysql://localhost:13306/coupon
     username: coupon
     password: coupon
     hikari:

@@ -43,6 +43,11 @@ public class CouponEventMetaCache {
                 .orElseThrow(() -> new BusinessException(ErrorCode.EVENT_NOT_FOUND)));
     }
 
+    /** reactive 경로용: 캐시 히트면 즉시 반환(논블로킹), 미스면 null — 호출측이 boundedElastic에서 get() 수행 */
+    public EventMeta getIfCached(Long eventId) {
+        return cache.getIfPresent(eventId);
+    }
+
     public void invalidate(Long eventId) {
         cache.invalidate(eventId);
     }

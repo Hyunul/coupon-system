@@ -27,6 +27,11 @@ public abstract class AbstractIntegrationTest {
         r.add("spring.datasource.url", MYSQL::getJdbcUrl);
         r.add("spring.datasource.username", MYSQL::getUsername);
         r.add("spring.datasource.password", MYSQL::getPassword);
+        // R2DBC 자동구성이 URL을 요구하므로 같은 컨테이너를 가리키게 한다 (reactive 경로 테스트에도 사용 가능)
+        r.add("spring.r2dbc.url", () -> "r2dbc:mysql://" + MYSQL.getHost() + ":" + MYSQL.getMappedPort(3306)
+                + "/" + MYSQL.getDatabaseName());
+        r.add("spring.r2dbc.username", MYSQL::getUsername);
+        r.add("spring.r2dbc.password", MYSQL::getPassword);
         r.add("spring.data.redis.host", REDIS::getHost);
         r.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
     }

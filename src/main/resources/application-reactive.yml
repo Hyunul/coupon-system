@@ -1,0 +1,12 @@
+# Netty(WebFlux) 역할 프로파일: --spring.profiles.active=reactive
+# 핫패스(발급)는 ReactiveRedis+Lua 논블로킹, 이력 조회는 R2DBC,
+# 저빈도 경로(이벤트 CRUD/상태 전환)는 기존 블로킹 서비스를 boundedElastic에 위임 (전환기 전략 — phase3 리포트 참조)
+spring:
+  main:
+    web-application-type: reactive
+
+coupon:
+  issue:
+    strategy: lua      # reactive 경로는 lua+stream 고정 (pessimistic/redisson은 servlet 전용 — 비교 실험용 baseline)
+  record:
+    mode: stream

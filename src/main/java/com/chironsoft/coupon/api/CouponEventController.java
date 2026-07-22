@@ -7,6 +7,7 @@ import com.chironsoft.coupon.api.dto.EventDtos.StatusRequest;
 import com.chironsoft.coupon.application.CouponEventService;
 import com.chironsoft.coupon.domain.CouponEvent;
 import jakarta.validation.Valid;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@Profile("!reactive")   // reactive 프로파일에서는 ReactiveCouponController가 동일 경로를 담당
 @RequestMapping("/api/v1/events")
 public class CouponEventController {
 

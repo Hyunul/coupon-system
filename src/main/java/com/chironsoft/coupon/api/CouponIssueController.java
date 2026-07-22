@@ -4,6 +4,7 @@ import com.chironsoft.coupon.api.dto.IssueDtos.IssueResponse;
 import com.chironsoft.coupon.api.dto.IssueDtos.PageResponse;
 import com.chironsoft.coupon.application.CouponIssueService;
 import com.chironsoft.coupon.domain.CouponIssue;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@Profile("!reactive")   // reactive 프로파일에서는 ReactiveCouponController가 동일 경로를 담당
 public class CouponIssueController {
 
     private final CouponIssueService issueService;
