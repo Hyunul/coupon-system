@@ -47,18 +47,29 @@ $k6Exit = $LASTEXITCODE
 $ErrorActionPreference = "Stop"
 Write-Host "k6 summary: $summaryPath (exit=$k6Exit; threshold 실패는 baseline에서 정상)"
 
-# 3) 정합성 검증 — over_issued / duplicated / qty_mismatch 모두 0 이어야 함
+# 3) 정합성 검증 — 초과/중복 0 + Redis-DB 대사 (stream 모드는 워커 드레인을 최대 120s 대기)
 Write-Host "[3/3] 정합성 검증" -ForegroundColor Cyan
 $verify = Get-Content (Join-Path $root "scripts\verify-consistency.sql") -Raw |
     docker exec -i -e MYSQL_PWD=coupon coupon-mysql mysql -ucoupon coupon -N -B
 $values = ($verify -split "\s+") | Where-Object { $_ -ne "" }
-$over = [int]$values[0]; $dup = [int]$values[1]; $mismatch = [int]$values[2]
-Write-Host ("over_issued={0} duplicated={1} qty_mismatch={2}" -f $over, $dup, $mismatch)
+$over = [int]$values[0]; $dup = [int]$values[1]
+
+$redisIssued = [int](docker exec coupon-redis redis-cli SCARD issued:1)
+$dbCount = 0
+foreach ($i in 1..60) {
+    $dbCount = [int](docker exec -e MYSQL_PWD=coupon coupon-mysql mysql -ucoupon coupon -N -B `
+        -e "SELECT COUNT(*) FROM coupon_issue WHERE event_id=1")
+    if ($dbCount -eq $redisIssued) { break }
+    if ($i -eq 1) { Write-Host "stream 드레인 대기 중 (워커 8081 필요)..." -ForegroundColor Yellow }
+    Start-Sleep 2
+}
+$mismatch = [math]::Abs($dbCount - $redisIssued)
+Write-Host ("over_issued={0} duplicated={1} db={2} redis_issued={3} mismatch={4}" -f $over, $dup, $dbCount, $redisIssued, $mismatch)
 
 if ($over -eq 0 -and $dup -eq 0 -and $mismatch -eq 0) {
-    Write-Host "정합성 OK: 초과/중복/대사 모두 0" -ForegroundColor Green
+    Write-Host "정합성 OK: 초과/중복 0, Redis-DB 대사 일치" -ForegroundColor Green
     exit 0
 } else {
-    Write-Host "정합성 위반 발견! 결과를 확인하세요." -ForegroundColor Red
+    Write-Host "정합성 위반 발견! (stream 모드면 워커 기동 여부 확인)" -ForegroundColor Red
     exit 1
 }

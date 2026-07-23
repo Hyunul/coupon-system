@@ -13,10 +13,12 @@ import com.chironsoft.coupon.common.ErrorCode;
 import com.chironsoft.coupon.infrastructure.redis.ReactiveRedisStockStore;
 import com.chironsoft.coupon.infrastructure.redis.RedisStockStore;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.r2dbc.core.DatabaseClient;
+import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -47,15 +49,22 @@ public class ReactiveCouponController {
     private final ReactiveRedisStockStore reactiveStockStore;
     private final CouponEventService eventService;
     private final DatabaseClient db;
+    private final boolean notifyEnabled;
+    private final String notifyUrl;
+    private final WebClient webClient = WebClient.create();
 
     public ReactiveCouponController(CouponEventMetaCache metaCache,
                                     ReactiveRedisStockStore reactiveStockStore,
                                     CouponEventService eventService,
-                                    DatabaseClient db) {
+                                    DatabaseClient db,
+                                    @Value("${coupon.notify.enabled:false}") boolean notifyEnabled,
+                                    @Value("${coupon.notify.url:http://localhost:8090/notify}") String notifyUrl) {
         this.metaCache = metaCache;
         this.reactiveStockStore = reactiveStockStore;
         this.eventService = eventService;
         this.db = db;
+        this.notifyEnabled = notifyEnabled;
+        this.notifyUrl = notifyUrl;
     }
 
     // ---------- 발급 (핫패스, 논블로킹) ----------
@@ -72,12 +81,27 @@ public class ReactiveCouponController {
                     return reactiveStockStore.issueAtomicallyWithStream(eventId, userId, now.toString());
                 })
                 .flatMap(result -> switch (result) {
-                    case RedisStockStore.OK -> Mono.just(ResponseEntity.status(HttpStatus.CREATED)
+                    case RedisStockStore.OK -> notifyThen(ResponseEntity.status(HttpStatus.CREATED)
                             .body(new IssueResponse(null, eventId, userId, now)));
                     case RedisStockStore.SOLD_OUT -> Mono.error(new BusinessException(ErrorCode.SOLD_OUT));
                     case RedisStockStore.DUPLICATE -> Mono.error(new BusinessException(ErrorCode.DUPLICATE_ISSUE));
                     default -> Mono.error(new IllegalStateException("unexpected lua result: " + result));
                 });
+    }
+
+    /**
+     * "왜 Netty인가" 실증 장치: 동기(servlet) 버전과 같은 의미론(응답 전 알림 완료 대기)을 유지하되
+     * 논블로킹으로 기다린다 — 지연 N초가 스레드를 점유하지 않으므로 용량이 스레드 수에 묶이지 않는다.
+     * 기본 비활성 (coupon.notify.enabled=true일 때만).
+     */
+    private Mono<ResponseEntity<IssueResponse>> notifyThen(ResponseEntity<IssueResponse> response) {
+        if (!notifyEnabled) {
+            return Mono.just(response);
+        }
+        return webClient.post().uri(notifyUrl).retrieve().toBodilessEntity()
+                .timeout(java.time.Duration.ofSeconds(35))
+                .onErrorResume(e -> Mono.empty())   // 알림 실패해도 발급 유지 (servlet 버전과 동일 의미론)
+                .thenReturn(response);
     }
 
     /** 캐시 히트면 논블로킹, 미스(10s TTL 만료)면 boundedElastic에서 1회 로드 */

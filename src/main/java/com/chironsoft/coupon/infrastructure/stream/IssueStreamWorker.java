@@ -41,6 +41,10 @@ public class IssueStreamWorker {
     private static final Logger log = LoggerFactory.getLogger(IssueStreamWorker.class);
     private static final String GROUP = "workers";
     private static final String CONSUMER = "w1";
+    /** 알림 재시도 지연 큐(ZSET): member=eventId:userId:attempt, score=재시도 예정 시각(ms) */
+    private static final String RETRY_KEY = "notify:retry";
+    private static final int MAX_ATTEMPTS = 5;
+    private static final Duration RECLAIM_MIN_IDLE = Duration.ofSeconds(60);
 
     private final StringRedisTemplate redis;
     private final CouponIssueRepository issueRepository;
@@ -51,6 +55,7 @@ public class IssueStreamWorker {
     private final Duration notifyTimeout;
 
     private final ExecutorService loop = Executors.newSingleThreadExecutor(r -> new Thread(r, "issue-stream-worker"));
+    private final ExecutorService retryLoopExec = Executors.newSingleThreadExecutor(r -> new Thread(r, "notify-retry-worker"));
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     public IssueStreamWorker(StringRedisTemplate redis,
@@ -73,6 +78,7 @@ public class IssueStreamWorker {
         createGroupFromBeginning();
         running.set(true);
         loop.submit(this::consumeLoop);
+        retryLoopExec.submit(this::retryLoop);
         log.info("issue-stream worker started (notifyEnabled={}, url={})", notifyEnabled, notifyUrl);
     }
 
@@ -80,6 +86,7 @@ public class IssueStreamWorker {
     void stop() {
         running.set(false);
         loop.shutdownNow();
+        retryLoopExec.shutdownNow();
     }
 
     /**
@@ -96,8 +103,13 @@ public class IssueStreamWorker {
 
     private void consumeLoop() {
         StreamReadOptions options = StreamReadOptions.empty().count(100).block(Duration.ofSeconds(2));
+        int cycle = 0;
         while (running.get()) {
             try {
+                // 주기적으로(약 30s) 죽은 컨슈머의 pending 메시지를 회수해 at-least-once 완성
+                if (++cycle % 15 == 0) {
+                    reclaimStalePending();
+                }
                 List<MapRecord<String, Object, Object>> records = redis.opsForStream().read(
                         Consumer.from(GROUP, CONSUMER), options,
                         StreamOffset.create(RedisStockStore.STREAM_KEY, ReadOffset.lastConsumed()));
@@ -142,9 +154,89 @@ public class IssueStreamWorker {
                     .subscribe(
                             ok -> markNotify(eventId, userId, "SENT"),
                             err -> {
-                                log.warn("notify failed: event={} user={} cause={}", eventId, userId, err.toString());
-                                markNotify(eventId, userId, "FAILED");
+                                log.warn("notify failed → 재시도 큐 등록: event={} user={} cause={}",
+                                        eventId, userId, err.toString());
+                                scheduleRetry(eventId, userId, 1);
                             });
+        }
+    }
+
+    /** 인라인 재시도 소진 후 지수 백오프 지연 큐(ZSET)에 등록 — at-least-once 발송 보장 (roadmap 2.2) */
+    private void scheduleRetry(Long eventId, Long userId, int attempt) {
+        long delayMs = (long) (Math.pow(2, attempt) * 1000);   // 2s, 4s, 8s, 16s, 32s
+        redis.opsForZSet().add(RETRY_KEY, eventId + ":" + userId + ":" + attempt,
+                System.currentTimeMillis() + delayMs);
+        markNotify(eventId, userId, "RETRYING");
+    }
+
+    /** 지연 큐 소비: 기한 도래분을 ZREM으로 선점(다중 워커 안전) 후 재발송 */
+    private void retryLoop() {
+        while (running.get()) {
+            try {
+                var due = redis.opsForZSet().rangeByScore(RETRY_KEY, 0, System.currentTimeMillis(), 0, 10);
+                if (due == null || due.isEmpty()) {
+                    Thread.sleep(1000);
+                    continue;
+                }
+                for (String member : due) {
+                    Long removed = redis.opsForZSet().remove(RETRY_KEY, member);
+                    if (removed == null || removed != 1L) {
+                        continue;   // 다른 워커가 선점
+                    }
+                    String[] parts = member.split(":");
+                    Long eventId = Long.valueOf(parts[0]);
+                    Long userId = Long.valueOf(parts[1]);
+                    int attempt = Integer.parseInt(parts[2]);
+                    try {
+                        webClient.post().uri(notifyUrl).retrieve().toBodilessEntity()
+                                .timeout(notifyTimeout).block();
+                        markNotify(eventId, userId, "SENT");
+                        log.info("notify 재시도 성공: event={} user={} attempt={}", eventId, userId, attempt);
+                    } catch (Exception e) {
+                        if (attempt >= MAX_ATTEMPTS) {
+                            markNotify(eventId, userId, "FAILED_PERMANENT");
+                            log.error("notify 최종 실패(수동 개입 필요): event={} user={} attempts={}",
+                                    eventId, userId, attempt);
+                        } else {
+                            scheduleRetry(eventId, userId, attempt + 1);
+                        }
+                    }
+                }
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            } catch (Exception e) {
+                if (running.get()) {
+                    log.error("retry loop error", e);
+                    sleepQuietly();
+                }
+            }
+        }
+    }
+
+    /** 60초 이상 미처리(pending)로 남은 메시지를 회수해 재처리 — 워커 급사 시 유실 방지 */
+    private void reclaimStalePending() {
+        try {
+            org.springframework.data.redis.connection.stream.PendingMessages pending =
+                    redis.opsForStream().pending(RedisStockStore.STREAM_KEY, GROUP,
+                            org.springframework.data.domain.Range.unbounded(), 100);
+            java.util.List<org.springframework.data.redis.connection.stream.RecordId> stale = new java.util.ArrayList<>();
+            for (org.springframework.data.redis.connection.stream.PendingMessage pm : pending) {
+                if (pm.getElapsedTimeSinceLastDelivery().compareTo(RECLAIM_MIN_IDLE) > 0) {
+                    stale.add(pm.getId());
+                }
+            }
+            if (stale.isEmpty()) {
+                return;
+            }
+            List<MapRecord<String, Object, Object>> claimed = redis.opsForStream().claim(
+                    RedisStockStore.STREAM_KEY, GROUP, CONSUMER, RECLAIM_MIN_IDLE,
+                    stale.toArray(new org.springframework.data.redis.connection.stream.RecordId[0]));
+            log.warn("stale pending {}건 회수 — 재처리", claimed.size());
+            for (MapRecord<String, Object, Object> record : claimed) {
+                process(record);
+            }
+        } catch (Exception e) {
+            log.warn("pending 회수 실패(다음 주기 재시도): {}", e.getMessage());
         }
     }
 

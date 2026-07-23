@@ -9,7 +9,8 @@
 - **Phase 4 완료** — GC: heap 2g 고정으로 p95 158→2.6ms(pause 191→26회), ZGC는 추가 이득 미미. 장애 훈련 3건 + 포스트모템 3편(docs/postmortems/): 풀 고갈(SYN 1건 패킷 증명), 타임아웃 미설정(reactor-netty 기본 10s가 용량 결정 — 스레드덤프 증거), maxclients(기동 불능 + 2단계 복구). 리포트+회고 작성됨.
 - **Phase 6 완료** — skills 4종(phase-retrospective·loadtest·postmortem·explain-check), PreToolUse 가드(.claude/hooks/guard.py, DROP·rm -rf·force push 차단, 테스트 15/15), MCP 서버 2종(tools/mcp/: mysql-explain·perf, Python 3.8 제약으로 JSON-RPC stdio 직접 구현, .mcp.json 등록). 회고 작성됨.
 - **Phase 5 로컬 리허설 완료** — Nginx LB(lb 프로파일)+앱 2대(8082/8083): chaos 성공률 99.990%(인스턴스 2회 교체, 목표 99.9% 달성), 알림 규칙 5종 로드·InstanceDown 발화 확인, keep-alive 훈련(핸드셰이크 43배·실패 55%→0.65%, drill4). **리허설이 워커 버그 2건 적발·수정**: NOGROUP 루프, latest 그룹 생성 백로그 유실(→ offset 0). 리포트: docs/reports/phase5-local-rehearsal.md
-- **잔여(실배포에서만 가능)**: AWS 배포 + 부하 생성기 분리 재측정, TIME_WAIT 정석 관찰·tc 패킷 유실, k6 회귀 CI 게이트, Alertmanager, 메타 캐시 pub/sub, graceful shutdown. **선행 조건: GitHub push + AWS 계정 (사용자 결정 필요)**. Phase 5 회고는 실배포 후 작성.
+- **로컬 잔여 작업 완료(2026-07-23)**: ① 기본 전략 lua+stream 전환(워커 필요 — 없으면 --coupon.record.mode=sync) ② graceful shutdown+shutdown 엔드포인트(롤링 실패 9→2건, 99.9967%) ③ 메타 캐시 pub/sub 무효화(두 인스턴스 로그 검증) ④ 알림 재시도 큐(ZSET 지수 백오프, 901건 중 SENT 898·영구실패 3 — 확률 이론값 일치)+pending 회수(claim) ⑤ Netty 우위 실증(3s 대기 의미론: servlet med 22.5s/드랍 2166 vs reactive 3.28s/드랍 0) ⑥ perf-gate CI(k6 회귀 게이트) ⑦ README 다이어그램·달성 수치.
+- **잔여(실배포에서만 가능)**: AWS 배포 + 부하 생성기 분리 재측정, TIME_WAIT 정석 관찰·tc 패킷 유실, Alertmanager 실연동. **선행 조건: AWS 계정**. Phase 5 회고는 실배포 후 작성. 개선 백로그: 워커 드레인 처리량 ~150건/s(단건 INSERT) — 배치 INSERT 여지.
 - HA 리허설 실행: `docker compose -f docker/docker-compose.yml --profile lb up -d` + 앱 2대(`--server.port=8082/8083`) + worker. LB 함정: upstream 이름 언더스코어 → Tomcat 400 (proxy_set_header Host 필수)
 - 패킷 캡처는 netshoot 사이드카 사용: `docker run --rm --net container:<이름> nicolaka/netshoot tcpdump ...`
 - GC 실험: `bash scripts/gc-experiment.sh "default g1tuned zgc"` (JVM 옵션은 -PbootJvmArgs, 로그 경로는 공백 때문에 반드시 상대 경로)

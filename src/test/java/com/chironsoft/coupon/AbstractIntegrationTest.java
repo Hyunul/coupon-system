@@ -34,5 +34,8 @@ public abstract class AbstractIntegrationTest {
         r.add("spring.r2dbc.password", MYSQL::getPassword);
         r.add("spring.data.redis.host", REDIS::getHost);
         r.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+        // 기본값은 stream(워커 소비)이지만 테스트 컨텍스트엔 워커가 없어 DB 단언이 불가 —
+        // 전략 테스트는 sync 경로로 검증하고, stream 경로는 E2E 실험(드레인 대사)으로 검증한다
+        r.add("coupon.record.mode", () -> "sync");
     }
 }

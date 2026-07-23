@@ -1,6 +1,10 @@
 coupon:
   issue:
-    strategy: pessimistic   # pessimistic | redisson | lua — 재빌드 없이 -Dcoupon.issue.strategy=lua 로 교체
+    strategy: lua           # Phase 2 채택안 — 이력 기록 비동기 분리(Phase 3b) 완료로 기본 전환.
+                            # baseline 재현 시 --coupon.issue.strategy=pessimistic
+  record:
+    mode: stream            # 임계 경로에서 DB 제거. 이력 기록은 worker 프로파일 프로세스가 소비
+                            # (worker 없이 단독 실행하려면 --coupon.record.mode=sync)
 
 spring:
   application:
@@ -33,15 +37,21 @@ spring:
           time_zone: UTC
 
 server:
+  shutdown: graceful        # 롤링 배포 시 in-flight 요청 완료 후 종료 (리허설 근거: chaos 실패 9건)
   tomcat:
     mbeanregistry:
       enabled: true           # tomcat.threads.* 메트릭 노출에 필수
 
+spring.lifecycle.timeout-per-shutdown-phase: 20s
+
 management:
+  endpoint:
+    shutdown:
+      enabled: true           # 롤링 배포 트리거용 (로컬/사설망 전용 — 실배포 시 노출 경로 보호 필수)
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,metrics,prometheus,shutdown
   metrics:
     distribution:
       percentiles-histogram:
