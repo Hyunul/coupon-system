@@ -7,7 +7,8 @@
 
 - **Phase 2 완료** — 3전략 스파이크 비교: lua가 발급 응답 12s→34ms(354배)·정상 처리 3.1배, redisson은 락 이동으로 오히려 악화(절반). 정합성 3전략 모두 0/0/0. 리포트+회고 작성됨.
 - **Phase 4 완료** — GC: heap 2g 고정으로 p95 158→2.6ms(pause 191→26회), ZGC는 추가 이득 미미. 장애 훈련 3건 + 포스트모템 3편(docs/postmortems/): 풀 고갈(SYN 1건 패킷 증명), 타임아웃 미설정(reactor-netty 기본 10s가 용량 결정 — 스레드덤프 증거), maxclients(기동 불능 + 2단계 복구). 리포트+회고 작성됨.
-- **다음: Phase 5** — AWS 크레딧 실배포(Nginx+앱 2대), 무중단 배포, chaos(인스턴스 강제 종료), Prometheus 알림 규칙(pending·rejected_connections·지연 기반), k6 성능 회귀 CI 게이트. 이월: TIME_WAIT·패킷 유실 훈련(Nginx/tc 필요), 알림 재시도 큐·XAUTOCLAIM, Netty 우위 조건 실증
+- **Phase 6 완료** — skills 4종(phase-retrospective·loadtest·postmortem·explain-check), PreToolUse 가드(.claude/hooks/guard.py, DROP·rm -rf·force push 차단, 테스트 15/15), MCP 서버 2종(tools/mcp/: mysql-explain·perf, Python 3.8 제약으로 JSON-RPC stdio 직접 구현, .mcp.json 등록). 회고 작성됨.
+- **다음(마지막): Phase 5** — AWS 크레딧 실배포(Nginx+앱 2대), 무중단 배포, chaos(인스턴스 강제 종료), Prometheus 알림 규칙(pending·rejected_connections·지연 기반), k6 성능 회귀 CI 게이트. **선행 조건: GitHub 원격 push + AWS 계정 (사용자 결정 필요)**. 이월: TIME_WAIT·패킷 유실 훈련(Nginx/tc 필요), 알림 재시도 큐·XAUTOCLAIM, Netty 우위 조건 실증
 - 패킷 캡처는 netshoot 사이드카 사용: `docker run --rm --net container:<이름> nicolaka/netshoot tcpdump ...`
 - GC 실험: `bash scripts/gc-experiment.sh "default g1tuned zgc"` (JVM 옵션은 -PbootJvmArgs, 로그 경로는 공백 때문에 반드시 상대 경로)
 - reactive(Netty) 실행: `.\gradlew.bat bootRun --args='--spring.profiles.active=reactive'` (핫패스 논블로킹, 이력 R2DBC). JDBC+R2DBC 공존 함정은 config/DataSourceConfig 주석 참조
