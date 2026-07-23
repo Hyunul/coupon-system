@@ -1,0 +1,44 @@
+# Phase 5 알림 규칙 — Phase 1~4 실험·포스트모템이 약속한 지표들
+# (검증: docker exec coupon-prometheus promtool check rules /etc/prometheus/rules.yml)
+groups:
+  - name: coupon-alerts
+    rules:
+      # 포스트모템 drill1: 풀 대기는 로그가 없다 — pending이 유일한 조기 신호
+      - alert: HikariPendingHigh
+        expr: hikaricp_connections_pending > 10
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "HikariCP 대기 스레드 {{ $value }}개 — 풀 고갈 진행 중 (drill1 참조)"
+
+      # 포스트모템 drill2: 에러율 0%인 채 지연만 폭증하는 장애는 지연 알림으로만 잡힌다
+      - alert: IssueLatencyP99High
+        expr: histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{uri="/api/v1/events/{eventId}/issues"}[2m]))) > 0.5
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "발급 p99 {{ $value }}s > 500ms — 에러율과 무관하게 발화 (drill2 참조)"
+
+      - alert: HighErrorRate
+        expr: >
+          sum(rate(http_server_requests_seconds_count{status=~"5.."}[1m]))
+            / sum(rate(http_server_requests_seconds_count[1m])) > 0.01
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "5xx 비율 {{ $value | humanizePercentage }} > 1%"
+
+      - alert: InstanceDown
+        expr: up{job="coupon-api"} == 0
+        for: 30s
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.instance }} 다운 — chaos/배포 중이면 예상 알림"
+
+      # 포스트모템 drill3: rejected_connections는 누적 카운터 — 증가분으로 감시
+      - alert: RedisRejectedConnections
+        expr: increase(redis_rejected_connections_total[5m]) > 0
+        for: 0m
+        labels: { severity: critical }
+        annotations:
+          summary: "Redis 연결 거부 발생 (+{{ $value }}) — maxclients 예산 확인 (drill3 참조)"

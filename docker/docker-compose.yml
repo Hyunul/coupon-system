@@ -41,6 +41,28 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules.yml:/etc/prometheus/rules.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: coupon-redis-exporter
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    depends_on:
+      - redis
+
+  # HA 리허설용 LB: docker compose --profile lb up -d nginx
+  # 단일 실행 모드(앱이 호스트 8080)와 포트가 겹치므로 필요할 때만 기동한다
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: coupon-nginx
+    profiles: ["lb"]
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

@@ -70,11 +70,7 @@ public class IssueStreamWorker {
 
     @PostConstruct
     void start() {
-        try {
-            redis.opsForStream().createGroup(RedisStockStore.STREAM_KEY, GROUP);
-        } catch (Exception e) {
-            log.info("consumer group already exists: {}", e.getMessage());
-        }
+        createGroupFromBeginning();
         running.set(true);
         loop.submit(this::consumeLoop);
         log.info("issue-stream worker started (notifyEnabled={}, url={})", notifyEnabled, notifyUrl);
@@ -84,6 +80,18 @@ public class IssueStreamWorker {
     void stop() {
         running.set(false);
         loop.shutdownNow();
+    }
+
+    /**
+     * 그룹을 스트림 처음(0)부터 생성한다. latest($)로 만들면 워커 기동 전에 쌓인 백로그를
+     * 통째로 건너뛴다 — Phase 5 리허설에서 실측한 유실 버그의 수정 (at-least-once 보장).
+     */
+    private void createGroupFromBeginning() {
+        try {
+            redis.opsForStream().createGroup(RedisStockStore.STREAM_KEY, ReadOffset.from("0"), GROUP);
+        } catch (Exception e) {
+            log.info("consumer group 이미 존재: {}", e.getMessage());
+        }
     }
 
     private void consumeLoop() {
@@ -101,7 +109,14 @@ public class IssueStreamWorker {
                 }
             } catch (Exception e) {
                 if (running.get()) {
-                    log.error("stream consume error", e);
+                    // DEL stream:issue 등으로 스트림이 재생성되면 consumer group도 소실된다(NOGROUP).
+                    // 재생성하지 않으면 영원히 에러 루프 — Phase 5 chaos 리허설에서 실측한 버그의 수정.
+                    if (String.valueOf(e).contains("NOGROUP") || String.valueOf(e.getMessage()).contains("NOGROUP")) {
+                        log.warn("consumer group 소실 감지 — 재생성 후 재개");
+                        createGroupFromBeginning();
+                    } else {
+                        log.error("stream consume error", e);
+                    }
                     sleepQuietly();
                 }
             }
