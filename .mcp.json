@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "mysql-explain": {
+      "command": "python",
+      "args": ["tools/mcp/mysql_explain_mcp.py"]
+    },
+    "perf": {
+      "command": "python",
+      "args": ["tools/mcp/perf_mcp.py"]
+    }
+  }
+}
