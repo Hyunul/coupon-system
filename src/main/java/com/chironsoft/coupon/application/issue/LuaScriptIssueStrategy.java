@@ -24,16 +24,19 @@ public class LuaScriptIssueStrategy implements IssueStrategy {
     private final CouponEventMetaCache metaCache;
     private final RedisStockStore stockStore;
     private final CouponIssueRepository issueRepository;
-    private final boolean streamMode;
+    private final org.springframework.kafka.core.KafkaTemplate<Object, Object> kafkaTemplate;
+    private final String recordMode;
 
     public LuaScriptIssueStrategy(CouponEventMetaCache metaCache,
                                   RedisStockStore stockStore,
                                   CouponIssueRepository issueRepository,
+                                  org.springframework.kafka.core.KafkaTemplate<Object, Object> kafkaTemplate,
                                   @Value("${coupon.record.mode:sync}") String recordMode) {
         this.metaCache = metaCache;
         this.stockStore = stockStore;
         this.issueRepository = issueRepository;
-        this.streamMode = "stream".equals(recordMode);
+        this.kafkaTemplate = kafkaTemplate;
+        this.recordMode = recordMode;
     }
 
     @Override
@@ -43,7 +46,7 @@ public class LuaScriptIssueStrategy implements IssueStrategy {
             throw new BusinessException(ErrorCode.NOT_OPEN);
         }
 
-        String result = streamMode
+        String result = "stream".equals(recordMode)
                 ? stockStore.issueAtomicallyWithStream(eventId, userId, now.toString())
                 : stockStore.issueAtomically(eventId, userId);
         switch (result) {
@@ -53,9 +56,20 @@ public class LuaScriptIssueStrategy implements IssueStrategy {
             default -> throw new IllegalStateException("unexpected lua result: " + result);
         }
 
-        if (streamMode) {
+        if ("stream".equals(recordMode)) {
             // 임계 경로에서 DB 완전 제거 — 이력 INSERT는 워커가 Stream을 소비하며 수행 (at-least-once,
             // 중복 소비는 uk_event_user가 무해화). 응답의 issueId는 null (기록은 최종적 일관성).
+            // 판정(Lua)과 발행(XADD)이 단일 스크립트라 원자적 — Kafka 모드와의 핵심 차이.
+            return new CouponIssue(eventId, userId, now);
+        }
+        if ("kafka".equals(recordMode)) {
+            // Kafka 비교 실험: 판정(Redis Lua)과 발행(Kafka send)이 원자가 아니다 —
+            // 판정 성공 후 send 실패 시 기록 유실 가능(브로커 미가용 등). 정석 해법은
+            // Transactional Outbox이며, 이 트레이드오프 자체가 비교 리포트의 핵심 논점.
+            String payload = String.format("{\"eventId\":%d,\"userId\":%d,\"issuedAt\":\"%s\"}",
+                    eventId, userId, now);
+            kafkaTemplate.send(com.chironsoft.coupon.infrastructure.stream.KafkaIssueWorker.TOPIC,
+                    eventId + ":" + userId, payload);
             return new CouponIssue(eventId, userId, now);
         }
         try {

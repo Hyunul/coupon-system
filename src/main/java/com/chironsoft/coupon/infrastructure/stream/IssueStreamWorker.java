@@ -36,6 +36,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @Component
 @Profile("worker")
+// kafka 모드에서는 KafkaIssueWorker가 대신 소비 (비교 실험: coupon.record.mode=kafka)
+@org.springframework.boot.autoconfigure.condition.ConditionalOnExpression(
+        "!'kafka'.equals('${coupon.record.mode:stream}')")
 public class IssueStreamWorker {
 
     private static final Logger log = LoggerFactory.getLogger(IssueStreamWorker.class);
@@ -49,6 +52,7 @@ public class IssueStreamWorker {
     private final StringRedisTemplate redis;
     private final CouponIssueRepository issueRepository;
     private final TransactionTemplate tx;
+    private final IssueRecordWriter recordWriter;
     private final WebClient webClient;
     private final boolean notifyEnabled;
     private final String notifyUrl;
@@ -61,12 +65,14 @@ public class IssueStreamWorker {
     public IssueStreamWorker(StringRedisTemplate redis,
                              CouponIssueRepository issueRepository,
                              TransactionTemplate tx,
+                             IssueRecordWriter recordWriter,
                              @Value("${coupon.notify.enabled:false}") boolean notifyEnabled,
                              @Value("${coupon.notify.url:http://localhost:8090/notify}") String notifyUrl,
                              @Value("${coupon.notify.timeout-ms:5000}") long notifyTimeoutMs) {
         this.redis = redis;
         this.issueRepository = issueRepository;
         this.tx = tx;
+        this.recordWriter = recordWriter;
         this.webClient = WebClient.create();
         this.notifyEnabled = notifyEnabled;
         this.notifyUrl = notifyUrl;
@@ -138,22 +144,13 @@ public class IssueStreamWorker {
      * 배치에 중복(재소비)이 섞이면 전체 롤백 후 행 단위 폴백 — uk_event_user가 멱등화.
      */
     private void processBatch(List<MapRecord<String, Object, Object>> records) {
-        try {
+        recordWriter.writeBatch(() -> {
             List<CouponIssue> batch = new java.util.ArrayList<>(records.size());
             for (MapRecord<String, Object, Object> record : records) {
                 batch.add(toIssue(record));
             }
-            tx.executeWithoutResult(s -> issueRepository.saveAll(batch));
-        } catch (org.springframework.dao.DataIntegrityViolationException e) {
-            // 폴백은 엔티티를 새로 만든다 — 롤백된 배치의 인스턴스는 id가 할당돼 있어 재사용 불가
-            for (MapRecord<String, Object, Object> record : records) {
-                try {
-                    tx.executeWithoutResult(s -> issueRepository.save(toIssue(record)));
-                } catch (org.springframework.dao.DataIntegrityViolationException ignore) {
-                    // at-least-once 재소비 — 무시하고 ACK
-                }
-            }
-        }
+            return batch;
+        });
         org.springframework.data.redis.connection.stream.RecordId[] ids = records.stream()
                 .map(MapRecord::getId)
                 .toArray(org.springframework.data.redis.connection.stream.RecordId[]::new);
