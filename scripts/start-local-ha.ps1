@@ -1,4 +1,4 @@
-# 로컬 HA 스택 원커맨드 기동: 인프라(docker) + 앱 2대 + 워커 + 시드까지
+﻿# 로컬 HA 스택 원커맨드 기동: 인프라(docker) + 앱 2대 + 워커 + 시드까지
 # 사용법: .\scripts\start-local-ha.ps1        (종료: .\scripts\stop-local-ha.ps1)
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot

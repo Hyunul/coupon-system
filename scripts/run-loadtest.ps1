@@ -1,4 +1,4 @@
-# 부하테스트 일괄 실행: reset -> k6 -> 정합성 검증
+﻿# 부하테스트 일괄 실행: reset -> k6 -> 정합성 검증
 # 사용법:
 #   .\scripts\run-loadtest.ps1 -Scenario issue-spike
 #   .\scripts\run-loadtest.ps1 -Scenario issue-baseline -K6Args "-e","RATE=500"

@@ -1,4 +1,4 @@
-# 로컬 HA 스택 종료: 앱/워커 프로세스 정리 (+ -Infra 스위치로 컨테이너까지 정지)
+﻿# 로컬 HA 스택 종료: 앱/워커 프로세스 정리 (+ -Infra 스위치로 컨테이너까지 정지)
 param([switch]$Infra)
 $ErrorActionPreference = "Continue"
 

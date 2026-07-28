@@ -1,8 +1,8 @@
-// 기능 회귀 확인용 스모크: 발급 → 이력 조회 → 잔여 수량 조회
-// 사전 조건: scripts/seed-event.sql 로 event_id=1 이 OPEN 상태여야 함
+// 기능 회귀 확인용 스모크: 발급 → 이력 조회(최종적 일관성: 5초 내 반영) → 잔여 수량 조회
+// 사전 조건: seed 후 PATCH OPEN (stream 모드는 워커 프로세스 필요 — run-loadtest.ps1/start-local-ha.ps1 참조)
 import http from 'k6/http';
 import exec from 'k6/execution';
-import { check } from 'k6';
+import { check, sleep } from 'k6';
 import { BASE_URL, EVENT_ID, USER_OFFSET } from '../lib/config.js';
 
 export const options = {
@@ -24,12 +24,22 @@ export default function () {
   });
   check(issueRes, { 'issue 201': (r) => r.status === 201 });
 
-  const historyRes = http.get(`${BASE_URL}/api/v1/users/${userId}/issues`, {
-    tags: { name: 'history' },
-  });
+  // stream 모드는 이력 기록이 비동기(워커 소비) — "5초 내 반영"을 검증한다 (최종적 일관성 SLA)
+  let historyRes;
+  let recorded = false;
+  for (let i = 0; i < 5; i++) {
+    historyRes = http.get(`${BASE_URL}/api/v1/users/${userId}/issues`, {
+      tags: { name: 'history' },
+    });
+    if (historyRes.status === 200 && historyRes.json('totalElements') === 1) {
+      recorded = true;
+      break;
+    }
+    sleep(1);
+  }
   check(historyRes, {
     'history 200': (r) => r.status === 200,
-    'history has 1': (r) => r.json('totalElements') === 1,
+    'history recorded within 5s': () => recorded,
   });
 
   const remainingRes = http.get(`${BASE_URL}/api/v1/events/${EVENT_ID}/remaining`, {
