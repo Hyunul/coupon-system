@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>coupon-system 라이브 데모</title>
+<style>
+  /* 다크 단일 룩 (운영 데모) — 팔레트: dataviz 검증 기준값 */
+  :root {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255,255,255,0.10);
+    --series-1: #3987e5;      /* 단일 시리즈(잔여·p95) */
+    --status-good: #0ca30c;   /* 201 발급 */
+    --status-warn: #fab219;   /* 409 소진·중복 */
+    --status-crit: #d03b3b;   /* 5xx */
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--page); color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 24px; max-width: 1080px; margin: 0 auto;
+  }
+  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  h1 { font-size: 20px; font-weight: 650; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .pill { font-size: 12px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-2); }
+  .grid { display: grid; gap: 12px; margin-top: 16px; }
+  .tiles { grid-template-columns: repeat(4, 1fr); }
+  .charts2 { grid-template-columns: 1fr 1fr; }
+  @media (max-width: 760px) { .tiles { grid-template-columns: repeat(2,1fr); } .charts2 { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .tile .label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .tile .value { font-size: 28px; font-weight: 650; margin-top: 4px; }
+  .tile .unit { font-size: 13px; color: var(--ink-2); font-weight: 400; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .chart-title { font-size: 13px; color: var(--ink-2); margin-bottom: 8px; font-weight: 600; }
+  canvas { width: 100%; height: 180px; display: block; cursor: crosshair; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--ink-2); margin-top: 8px; flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .issue-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  input[type=number] {
+    background: var(--page); color: var(--ink); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; width: 140px; font: inherit;
+  }
+  button {
+    background: var(--series-1); color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--ink-2); }
+  button:active { transform: translateY(1px); }
+  #result { font-size: 13px; min-height: 20px; margin-top: 10px; color: var(--ink-2); }
+  #result b { font-weight: 650; }
+  .tooltip {
+    position: fixed; pointer-events: none; background: var(--page); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px;
+    font-size: 12px; display: none; z-index: 10; white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  details { margin-top: 16px; }
+  summary { color: var(--muted); font-size: 13px; cursor: pointer; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 5px 10px; border-bottom: 1px solid var(--grid); color: var(--ink-2); }
+  th { color: var(--muted); font-weight: 600; }
+  th:first-child, td:first-child { text-align: left; }
+  footer { margin-top: 20px; font-size: 12px; color: var(--muted); }
+  footer a { color: var(--series-1); text-decoration: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>선착순 쿠폰 발급 — 라이브 데모</h1>
+  <span class="pill" id="event-pill">이벤트 로딩…</span>
+  <span class="sub">Nginx LB → 앱 2대 → Redis Lua 원자 판정 → Stream 워커</span>
+</header>
+
+<div class="grid" style="grid-template-columns: 1fr;">
+  <div class="card">
+    <div class="issue-row">
+      <input type="number" id="userId" placeholder="사용자 ID">
+      <button id="btn-issue">쿠폰 발급</button>
+      <button class="ghost" id="btn-random">랜덤 사용자로 발급</button>
+      <button class="ghost" id="btn-history">내 이력 보기</button>
+    </div>
+    <div id="result">사용자 ID를 넣고 발급을 눌러보세요. 같은 ID로 두 번 누르면 중복 방어(409)를 볼 수 있습니다.</div>
+  </div>
+</div>
+
+<div class="grid tiles">
+  <div class="card tile"><div class="label">잔여 수량</div><div class="value" id="t-remaining">–</div></div>
+  <div class="card tile"><div class="label">발급됨 (총량 대비)</div><div class="value" id="t-issued">–</div></div>
+  <div class="card tile"><div class="label"><span class="dot" style="background:var(--status-good)"></span>발급 처리율</div>
+    <div class="value" id="t-rps">– <span class="unit">req/s</span></div></div>
+  <div class="card tile"><div class="label"><span class="dot" style="background:var(--series-1)"></span>발급 p95</div>
+    <div class="value" id="t-p95">– <span class="unit">ms</span></div></div>
+</div>
+
+<div class="grid charts2">
+  <div class="card">
+    <div class="chart-title">잔여 수량 — 매진 곡선 (최근 2분)</div>
+    <canvas id="c-stock"></canvas>
+  </div>
+  <div class="card">
+    <div class="chart-title">발급 API p95 지연 (ms)</div>
+    <canvas id="c-p95"></canvas>
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns: 1fr;">
+  <div class="card">
+    <div class="chart-title">응답 상태별 처리율 (req/s)</div>
+    <canvas id="c-rps" style="height:200px"></canvas>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--status-good)"></span>✓ 201 발급</span>
+      <span><span class="dot" style="background:var(--status-warn)"></span>⚠ 409 소진·중복</span>
+      <span><span class="dot" style="background:var(--status-crit)"></span>✕ 5xx 오류</span>
+    </div>
+  </div>
+</div>
+
+<details>
+  <summary>표로 보기 (최근 20 샘플)</summary>
+  <table id="data-table">
+    <thead><tr><th>시각</th><th>잔여</th><th>201 rps</th><th>409 rps</th><th>5xx rps</th><th>p95 (ms)</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</details>
+
+<footer>
+  대시보드: <a href="http://localhost:3000" target="_blank">Grafana</a> ·
+  <a href="http://localhost:9090/alerts" target="_blank">Prometheus 알림</a> ·
+  부하는 <code>run-loadtest.ps1</code>로 — 이 화면에서 매진 곡선이 꺾이는 걸 볼 수 있습니다
+</footer>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+const PROM = 'http://localhost:9090';
+const EVENT_ID = 1;
+const WINDOW = 120;                     // 1s 샘플 × 2분
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+const samples = [];                     // {t, remaining, rps201, rps409, rps5xx, p95}
+let eventInfo = null;
+
+/* ---------- 데이터 수집 ---------- */
+async function fetchEvent() {
+  try {
+    const r = await fetch(`/api/v1/events/${EVENT_ID}`);
+    eventInfo = await r.json();
+    document.getElementById('event-pill').textContent =
+      `#${eventInfo.id} ${eventInfo.name} · 총 ${eventInfo.totalQty.toLocaleString()}장 · ${eventInfo.status}`;
+  } catch { document.getElementById('event-pill').textContent = '이벤트 조회 실패'; }
+}
+async function promQuery(q) {
+  const r = await fetch(`${PROM}/api/v1/query?query=${encodeURIComponent(q)}`);
+  const d = await r.json();
+  return d.data.result;
+}
+async function tick() {
+  const s = { t: new Date(), remaining: null, rps201: 0, rps409: 0, rps5xx: 0, p95: null };
+  try {
+    const r = await fetch(`/api/v1/events/${EVENT_ID}/remaining`);
+    s.remaining = (await r.json()).remainingQty;
+  } catch {}
+  try {
+    const rps = await promQuery(
+      `sum by (status) (rate(http_server_requests_seconds_count{uri="/api/v1/events/{eventId}/issues"}[15s]))`);
+    for (const row of rps) {
+      const v = parseFloat(row.value[1]) || 0;
+      if (row.metric.status === '201') s.rps201 = v;
+      else if (row.metric.status === '409') s.rps409 = v;
+      else if (/^5/.test(row.metric.status)) s.rps5xx += v;
+    }
+    const p95 = await promQuery(
+      `histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{uri="/api/v1/events/{eventId}/issues"}[30s])))`);
+    if (p95.length) { const v = parseFloat(p95[0].value[1]); if (!isNaN(v)) s.p95 = v * 1000; }
+  } catch {}
+  samples.push(s);
+  if (samples.length > WINDOW) samples.shift();
+  render();
+}
+
+/* ---------- 스탯 타일 & 표 ---------- */
+function render() {
+  const last = samples[samples.length - 1];
+  if (!last) return;
+  const fmt = (v, d=0) => v == null ? '–' : v.toLocaleString(undefined, {maximumFractionDigits: d});
+  document.getElementById('t-remaining').textContent = fmt(last.remaining);
+  document.getElementById('t-issued').textContent =
+    (eventInfo && last.remaining != null) ? `${fmt(eventInfo.totalQty - last.remaining)} / ${fmt(eventInfo.totalQty)}` : '–';
+  document.getElementById('t-rps').innerHTML = `${fmt(last.rps201, 1)} <span class="unit">req/s</span>`;
+  document.getElementById('t-p95').innerHTML = `${fmt(last.p95, 1)} <span class="unit">ms</span>`;
+
+  drawLine('c-stock', samples.map(s => s.remaining), { color: css('--series-1'), unit: '장' });
+  drawLine('c-p95',   samples.map(s => s.p95),       { color: css('--series-1'), unit: 'ms' });
+  drawMulti('c-rps', [
+    { vals: samples.map(s => s.rps201), color: css('--status-good'), name: '201' },
+    { vals: samples.map(s => s.rps409), color: css('--status-warn'), name: '409' },
+    { vals: samples.map(s => s.rps5xx), color: css('--status-crit'), name: '5xx' },
+  ]);
+
+  const tbody = document.querySelector('#data-table tbody');
+  tbody.innerHTML = samples.slice(-20).reverse().map(s =>
+    `<tr><td>${s.t.toLocaleTimeString()}</td><td>${fmt(s.remaining)}</td><td>${fmt(s.rps201,1)}</td>` +
+    `<td>${fmt(s.rps409,1)}</td><td>${fmt(s.rps5xx,1)}</td><td>${fmt(s.p95,1)}</td></tr>`).join('');
+}
+
+/* ---------- 캔버스 라인 차트 (2px 마크, 헤어라인 그리드, 크로스헤어 툴팁) ---------- */
+function setupCanvas(id) {
+  const c = document.getElementById(id);
+  const dpr = window.devicePixelRatio || 1;
+  const w = c.clientWidth, h = c.clientHeight;
+  c.width = w * dpr; c.height = h * dpr;
+  const ctx = c.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { c, ctx, w, h };
+}
+function frame(ctx, w, h, maxV) {
+  const pad = { l: 46, r: 10, t: 8, b: 18 };
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = css('--grid'); ctx.lineWidth = 1;
+  ctx.fillStyle = css('--muted'); ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+  for (let i = 0; i <= 3; i++) {
+    const y = pad.t + (h - pad.t - pad.b) * i / 3;
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(w - pad.r, y); ctx.stroke();
+    ctx.fillText(fmtTick(maxV * (1 - i / 3)), pad.l - 6, y + 4);
+  }
+  ctx.strokeStyle = css('--baseline');
+  ctx.beginPath(); ctx.moveTo(pad.l, h - pad.b); ctx.lineTo(w - pad.r, h - pad.b); ctx.stroke();
+  return pad;
+}
+const fmtTick = v => v >= 1000 ? (v/1000).toFixed(v >= 10000 ? 0 : 1) + 'k' : Math.round(v).toString();
+const chartState = {};   // id -> {pts, unit, series}
+
+function drawLine(id, vals, { color, unit }) {
+  const { ctx, w, h } = setupCanvas(id);
+  const clean = vals.map(v => v == null ? null : v);
+  const maxV = Math.max(1, ...clean.filter(v => v != null)) * 1.1;
+  const pad = frame(ctx, w, h, maxV);
+  const pts = [];
+  ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
+  let started = false;
+  clean.forEach((v, i) => {
+    const x = pad.l + (w - pad.l - pad.r) * i / (WINDOW - 1);
+    if (v == null) return;
+    const y = pad.t + (h - pad.t - pad.b) * (1 - v / maxV);
+    pts[i] = { x, y, v };
+    if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  chartState[id] = { pts: [pts], unit, names: [''], colors: [color], pad, w, h };
+}
+function drawMulti(id, series) {
+  const { ctx, w, h } = setupCanvas(id);
+  const maxV = Math.max(1, ...series.flatMap(s => s.vals.filter(v => v != null))) * 1.15;
+  const pad = frame(ctx, w, h, maxV);
+  const allPts = [];
+  for (const s of series) {
+    const pts = [];
+    ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.beginPath();
+    let started = false;
+    s.vals.forEach((v, i) => {
+      if (v == null) return;
+      const x = pad.l + (w - pad.l - pad.r) * i / (WINDOW - 1);
+      const y = pad.t + (h - pad.t - pad.b) * (1 - v / maxV);
+      pts[i] = { x, y, v };
+      if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    allPts.push(pts);
+  }
+  chartState[id] = { pts: allPts, unit: 'req/s', names: series.map(s => s.name), colors: series.map(s => s.color), pad, w, h };
+}
+
+/* 크로스헤어 + 툴팁 */
+const tooltip = document.getElementById('tooltip');
+for (const id of ['c-stock', 'c-p95', 'c-rps']) {
+  const el = document.getElementById(id);
+  el.addEventListener('mousemove', (e) => {
+    const st = chartState[id]; if (!st) return;
+    const rect = el.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const idx = Math.round((x - st.pad.l) / (rect.width - st.pad.l - st.pad.r) * (WINDOW - 1));
+    const s = samples[idx]; if (!s) { tooltip.style.display = 'none'; return; }
+    const lines = st.names.map((n, k) => {
+      const p = st.pts[k] && st.pts[k][idx];
+      if (!p) return null;
+      const label = n ? `${n}: ` : '';
+      return `<span style="color:${st.colors[k]}">●</span> ${label}${p.v.toLocaleString(undefined,{maximumFractionDigits:1})} ${st.unit}`;
+    }).filter(Boolean);
+    if (!lines.length) { tooltip.style.display = 'none'; return; }
+    tooltip.innerHTML = `${s.t.toLocaleTimeString()}<br>` + lines.join('<br>');
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX + 14) + 'px';
+    tooltip.style.top = (e.clientY - 10) + 'px';
+  });
+  el.addEventListener('mouseleave', () => tooltip.style.display = 'none');
+}
+
+/* ---------- 발급 체험 ---------- */
+const $ = id => document.getElementById(id);
+async function issue(userId) {
+  const res = document.getElementById('result');
+  try {
+    const r = await fetch(`/api/v1/events/${EVENT_ID}/issues`, { method: 'POST', headers: { 'X-USER-ID': userId } });
+    const body = await r.json();
+    if (r.status === 201) {
+      res.innerHTML = `<span style="color:var(--status-good)">✓</span> <b>발급 성공</b> — 사용자 ${userId} (${body.issuedAt}) · 이력은 워커가 수 초 내 기록합니다`;
+    } else if (body.code === 'DUPLICATE_ISSUE') {
+      res.innerHTML = `<span style="color:var(--status-warn)">⚠</span> <b>중복 발급 차단(409)</b> — 사용자 ${userId}는 이미 발급받았습니다 (1인 1매)`;
+    } else if (body.code === 'SOLD_OUT') {
+      res.innerHTML = `<span style="color:var(--status-warn)">⚠</span> <b>매진(409)</b> — 재고가 소진되었습니다`;
+    } else {
+      res.innerHTML = `<span style="color:var(--status-crit)">✕</span> <b>${body.code || r.status}</b> — ${body.message || ''}`;
+    }
+  } catch (e) { res.textContent = '요청 실패 — 스택이 떠 있는지 확인하세요 (start-local-ha.ps1)'; }
+}
+$('btn-issue').onclick = () => { const v = $('userId').value; if (v) issue(v); };
+$('btn-random').onclick = () => { const v = 5000000 + Math.floor(Math.random() * 999999); $('userId').value = v; issue(v); };
+$('btn-history').onclick = async () => {
+  const v = $('userId').value; if (!v) return;
+  const r = await fetch(`/api/v1/users/${v}/issues`);
+  const d = await r.json();
+  $('result').innerHTML = `사용자 ${v}의 발급 이력: <b>${d.totalElements}건</b>` +
+    (d.content[0] ? ` (최근: 이벤트 ${d.content[0].eventId}, ${d.content[0].issuedAt})` : '');
+};
+
+/* ---------- 시작 ---------- */
+fetchEvent();
+tick();
+setInterval(tick, 1000);
+setInterval(fetchEvent, 10000);
+</script>
+</body>
+</html>

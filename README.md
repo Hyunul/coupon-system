@@ -53,6 +53,8 @@ docker compose -f docker/docker-compose.yml up -d
 .\gradlew.bat bootRun            # 기본 lua+stream — 워커 없으면 --args='--coupon.record.mode=sync'
 ```
 
+**라이브 데모: http://localhost:8080/demo/** — 발급 체험(201/409), 매진 곡선, 상태별 처리율·p95 실시간 차트 (의존성 0 정적 페이지, Prometheus API 직접 폴링)
+
 Grafana: http://localhost:3000 · Prometheus: 9090 · Alertmanager: 9093 (알림은 mock-notify 로그로 수신)
 
 ## 진행 상태
