@@ -39,15 +39,21 @@ Java 21 · Spring Boot 3.5 (MVC → WebFlux 전환 예정) · MySQL 8 · Redis 7
 
 ## 빠른 시작
 
+**원커맨드 (HA 풀스택: Nginx LB + 앱 2대 + 워커 + 관측/알림):**
+
 ```powershell
-docker compose -f docker/docker-compose.yml up -d
-.\gradlew.bat bootRun
-Get-Content scripts\seed-event.sql -Raw | docker exec -i coupon-mysql mysql -ucoupon -pcoupon coupon
-k6 run k6/scenarios/smoke.js
-.\scripts\run-loadtest.ps1 -Scenario issue-spike   # 부하 + 정합성 검증
+.\scripts\start-local-ha.ps1     # 종료: .\scripts\stop-local-ha.ps1 [-Infra]
+.\scripts\run-loadtest.ps1 -Scenario issue-baseline -K6Args "-e","RATE=300"
 ```
 
-Grafana: http://localhost:3000 · Prometheus: http://localhost:9090
+**단일 인스턴스 (개발용):**
+
+```powershell
+docker compose -f docker/docker-compose.yml up -d
+.\gradlew.bat bootRun            # 기본 lua+stream — 워커 없으면 --args='--coupon.record.mode=sync'
+```
+
+Grafana: http://localhost:3000 · Prometheus: 9090 · Alertmanager: 9093 (알림은 mock-notify 로그로 수신)
 
 ## 진행 상태
 

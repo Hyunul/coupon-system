@@ -116,9 +116,7 @@ public class IssueStreamWorker {
                 if (records == null || records.isEmpty()) {
                     continue;
                 }
-                for (MapRecord<String, Object, Object> record : records) {
-                    process(record);
-                }
+                processBatch(records);
             } catch (Exception e) {
                 if (running.get()) {
                     // DEL stream:issue 등으로 스트림이 재생성되면 consumer group도 소실된다(NOGROUP).
@@ -135,30 +133,63 @@ public class IssueStreamWorker {
         }
     }
 
-    private void process(MapRecord<String, Object, Object> record) {
-        Long eventId = Long.valueOf(String.valueOf(record.getValue().get("eventId")));
-        Long userId = Long.valueOf(String.valueOf(record.getValue().get("userId")));
-        LocalDateTime issuedAt = LocalDateTime.parse(String.valueOf(record.getValue().get("issuedAt")));
-
+    /**
+     * 배치 처리: 단일 트랜잭션 saveAll(커밋 1회/배치)로 단건 커밋 병목(~150건/s)을 해소한다.
+     * 배치에 중복(재소비)이 섞이면 전체 롤백 후 행 단위 폴백 — uk_event_user가 멱등화.
+     */
+    private void processBatch(List<MapRecord<String, Object, Object>> records) {
         try {
-            issueRepository.save(new CouponIssue(eventId, userId, issuedAt));
+            List<CouponIssue> batch = new java.util.ArrayList<>(records.size());
+            for (MapRecord<String, Object, Object> record : records) {
+                batch.add(toIssue(record));
+            }
+            tx.executeWithoutResult(s -> issueRepository.saveAll(batch));
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
-            // at-least-once 재소비 — 유니크 제약이 멱등성을 보장하므로 무시하고 ACK
+            // 폴백은 엔티티를 새로 만든다 — 롤백된 배치의 인스턴스는 id가 할당돼 있어 재사용 불가
+            for (MapRecord<String, Object, Object> record : records) {
+                try {
+                    tx.executeWithoutResult(s -> issueRepository.save(toIssue(record)));
+                } catch (org.springframework.dao.DataIntegrityViolationException ignore) {
+                    // at-least-once 재소비 — 무시하고 ACK
+                }
+            }
         }
-        redis.opsForStream().acknowledge(RedisStockStore.STREAM_KEY, GROUP, record.getId());
+        org.springframework.data.redis.connection.stream.RecordId[] ids = records.stream()
+                .map(MapRecord::getId)
+                .toArray(org.springframework.data.redis.connection.stream.RecordId[]::new);
+        redis.opsForStream().acknowledge(RedisStockStore.STREAM_KEY, GROUP, ids);
 
         if (notifyEnabled) {
-            webClient.post().uri(notifyUrl).retrieve().toBodilessEntity()
-                    .timeout(notifyTimeout)
-                    .retryWhen(Retry.backoff(2, Duration.ofMillis(500)))
-                    .subscribe(
-                            ok -> markNotify(eventId, userId, "SENT"),
-                            err -> {
-                                log.warn("notify failed → 재시도 큐 등록: event={} user={} cause={}",
-                                        eventId, userId, err.toString());
-                                scheduleRetry(eventId, userId, 1);
-                            });
+            for (MapRecord<String, Object, Object> record : records) {
+                fireNotify(eventIdOf(record), userIdOf(record));
+            }
         }
+    }
+
+    private static Long eventIdOf(MapRecord<String, Object, Object> record) {
+        return Long.valueOf(String.valueOf(record.getValue().get("eventId")));
+    }
+
+    private static Long userIdOf(MapRecord<String, Object, Object> record) {
+        return Long.valueOf(String.valueOf(record.getValue().get("userId")));
+    }
+
+    private static CouponIssue toIssue(MapRecord<String, Object, Object> record) {
+        return new CouponIssue(eventIdOf(record), userIdOf(record),
+                LocalDateTime.parse(String.valueOf(record.getValue().get("issuedAt"))));
+    }
+
+    private void fireNotify(Long eventId, Long userId) {
+        webClient.post().uri(notifyUrl).retrieve().toBodilessEntity()
+                .timeout(notifyTimeout)
+                .retryWhen(Retry.backoff(2, Duration.ofMillis(500)))
+                .subscribe(
+                        ok -> markNotify(eventId, userId, "SENT"),
+                        err -> {
+                            log.warn("notify failed → 재시도 큐 등록: event={} user={} cause={}",
+                                    eventId, userId, err.toString());
+                            scheduleRetry(eventId, userId, 1);
+                        });
     }
 
     /** 인라인 재시도 소진 후 지수 백오프 지연 큐(ZSET)에 등록 — at-least-once 발송 보장 (roadmap 2.2) */
@@ -232,8 +263,8 @@ public class IssueStreamWorker {
                     RedisStockStore.STREAM_KEY, GROUP, CONSUMER, RECLAIM_MIN_IDLE,
                     stale.toArray(new org.springframework.data.redis.connection.stream.RecordId[0]));
             log.warn("stale pending {}건 회수 — 재처리", claimed.size());
-            for (MapRecord<String, Object, Object> record : claimed) {
-                process(record);
+            if (!claimed.isEmpty()) {
+                processBatch(claimed);
             }
         } catch (Exception e) {
             log.warn("pending 회수 실패(다음 주기 재시도): {}", e.getMessage());

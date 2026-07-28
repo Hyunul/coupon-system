@@ -5,6 +5,11 @@ global:
 rule_files:
   - /etc/prometheus/rules.yml
 
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
 scrape_configs:
   # 앱은 호스트에서 gradlew bootRun으로 실행되므로 host.docker.internal로 스크레이프
   # 8080: 단일 실행 모드 / 8082·8083: LB(HA 리허설) 모드의 앱 2대

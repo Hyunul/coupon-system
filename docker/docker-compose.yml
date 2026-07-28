@@ -45,6 +45,16 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: coupon-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    depends_on:
+      - mock-notify
+
   redis-exporter:
     image: oliver006/redis_exporter:v1.62.0
     container_name: coupon-redis-exporter

@@ -9,13 +9,33 @@ const DEFAULT_DELAY_MS = parseInt(process.env.DEFAULT_DELAY_MS || '0', 10);
 
 let received = 0;
 let failed = 0;
+let alerts = 0;
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   if (req.method === 'GET' && url.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'UP', received, failed }));
+    res.end(JSON.stringify({ status: 'UP', received, failed, alerts }));
+    return;
+  }
+
+  // Alertmanager 웹훅 수신부 — "알림을 받아본" 경험의 로컬 구현 (Phase 5)
+  if (req.method === 'POST' && url.pathname === '/alert') {
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', () => {
+      alerts++;
+      try {
+        const p = JSON.parse(body);
+        (p.alerts || []).forEach((a) =>
+          console.log(`[ALERT][${a.status}] ${a.labels.alertname} ${a.labels.instance || ''} — ${a.annotations?.summary || ''}`));
+      } catch (e) {
+        console.log('[ALERT] unparsable payload');
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ code: 'OK' }));
+    });
     return;
   }
 

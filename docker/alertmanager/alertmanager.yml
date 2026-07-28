@@ -1,0 +1,13 @@
+# 로컬 Alertmanager: 모든 알림을 mock-notify 웹훅으로 라우팅 (수신 로그로 발화 확인)
+route:
+  receiver: local-webhook
+  group_by: [alertname]
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 30m
+
+receivers:
+  - name: local-webhook
+    webhook_configs:
+      - url: http://mock-notify:8090/alert
+        send_resolved: true
