@@ -9,3 +9,7 @@ header_pages:
 # GitHub Pages 기본 활성 플러그인(relative-links, optional-front-matter, default-layout,
 # titles-from-headings)에 의존한다 — .md 상대 링크가 .html로 자동 변환된다
 markdown: kramdown
+# 첫 h1을 페이지 제목으로 쓰면서 본문에서는 제거 — 제목 이중 표시 방지
+titles_from_headings:
+  enabled: true
+  strip_title: true
