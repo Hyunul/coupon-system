@@ -8,7 +8,9 @@
   <img alt="핵심 실측: 초과·중복 발급 0건, 인스턴스 강제 교체 중 성공률 99.990%, 발급 응답 중앙값 354배 개선(12,042ms→34ms), 워커 드레인 8.3배(150→1,250건/s). 전/후 비교 — 비관적 락→Lua, GC heap 고정, Tomcat→Netty" src="docs/images/highlights-light.svg">
 </picture>
 
-**읽는 순서**: [로드맵(설계·목표)](docs/coupon-system-roadmap.md) → [실험 리포트 9편](docs/reports/) → [포스트모템 5편](docs/postmortems/) → [회고 6편(블로그 포스팅용)](docs/retrospectives/)
+**📖 블로그로 읽기: [hyunul.github.io/coupon-system](https://hyunul.github.io/coupon-system/)** — 회고·리포트·포스트모템 전편 발행
+
+**읽는 순서**: [로드맵(설계·목표)](docs/coupon-system-roadmap.md) → [실험 리포트 9편](docs/reports/) → [포스트모템 5편](docs/postmortems/) → [회고 6편](docs/retrospectives/)
 
 > 위 수치는 전부 **로컬 실측**이다(단일 머신, k6 공존 — 리포트마다 환경·커밋 해시 명시). AWS 실배포·부하테스트는 준비 완료·실행 대기: [운영 런북](docs/aws-load-test-runbook.md) · [실행 계획](docs/aws-execution-plan.md). 부하 생성기 분리가 필요한 p99·5,000rps 검증은 실배포에서 재측정한다.
 
