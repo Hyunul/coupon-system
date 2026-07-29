@@ -18,9 +18,21 @@ bin/
 
 # Load test outputs
 k6-results/
+evidence/aws/
+aws-*-summary.json
+
+# Terraform local state and generated provider artifacts
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+infra/aws/ttl_cleanup.zip
 
 # OMC / Claude local state (프로젝트 스킬·훅·설정은 AI 하네스 산출물로 커밋 대상)
 .omc/
+.gjc/
 .claude/*
 !.claude/skills/
 !.claude/hooks/
