@@ -1,0 +1,7 @@
+title: coupon-system 실험 노트
+description: 선착순 쿠폰 발급 시스템 — 측정→병목 발견→개선→재측정을 수치로 기록한 성능 튜닝 블로그
+lang: ko
+theme: minima
+# GitHub Pages 기본 활성 플러그인(relative-links, optional-front-matter, default-layout,
+# titles-from-headings)에 의존한다 — .md 상대 링크가 .html로 자동 변환된다
+markdown: kramdown
