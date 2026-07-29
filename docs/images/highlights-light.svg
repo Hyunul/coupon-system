@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="470" viewBox="0 0 880 470" font-family="system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif">
+  <!-- ===== KPI row ===== -->
+  <g>
+    <!-- tile 1 -->
+    <g transform="translate(0,0)">
+      <text x="0" y="20" font-size="13" fill="#52514e">초과·중복 발급</text>
+      <text x="0" y="62" font-size="36" font-weight="700" fill="#0b0b0b">0건</text>
+      <text x="0" y="86" font-size="12" fill="#898781">스파이크 76만 시도 포함 전 실험</text>
+      <text x="0" y="104" font-size="12" fill="#898781">Lua SISMEMBER + DB 유니크 이중 방어</text>
+    </g>
+    <!-- tile 2 -->
+    <g transform="translate(225,0)">
+      <text x="0" y="20" font-size="13" fill="#52514e">인스턴스 강제 교체 중 성공률</text>
+      <text x="0" y="62" font-size="36" font-weight="700" fill="#0b0b0b">99.990%</text>
+      <text x="0" y="86" font-size="12" fill="#006300">▲ 목표 99.9% 달성</text>
+      <text x="0" y="104" font-size="12" fill="#898781">chaos 리허설, 2회 교체 포함</text>
+    </g>
+    <!-- tile 3 -->
+    <g transform="translate(450,0)">
+      <text x="0" y="20" font-size="13" fill="#52514e">발급 응답 중앙값 개선</text>
+      <text x="0" y="62" font-size="36" font-weight="700" fill="#0b0b0b">354×</text>
+      <text x="0" y="86" font-size="12" fill="#006300">▼ 12,042ms → 34ms</text>
+      <text x="0" y="104" font-size="12" fill="#898781">비관적 락 → Redis Lua 원자화</text>
+    </g>
+    <!-- tile 4 -->
+    <g transform="translate(675,0)">
+      <text x="0" y="20" font-size="13" fill="#52514e">워커 드레인 처리량</text>
+      <text x="0" y="62" font-size="36" font-weight="700" fill="#0b0b0b">8.3×</text>
+      <text x="0" y="86" font-size="12" fill="#006300">▲ 150 → 1,250건/s</text>
+      <text x="0" y="104" font-size="12" fill="#898781">Stream 소비 배치 커밋</text>
+    </g>
+  </g>
+
+  <line x1="0" y1="130" x2="880" y2="130" stroke="#e1e0d9" stroke-width="1"/>
+
+  <!-- ===== before/after bars ===== -->
+  <text x="0" y="160" font-size="14" font-weight="600" fill="#0b0b0b">병목 → 개선 실측 (각 행은 개선 전 값 기준 선형 스케일)</text>
+
+  <!-- row 1 -->
+  <g transform="translate(0,180)">
+    <text x="0" y="14" font-size="13" fill="#52514e">발급 응답 중앙값 — 비관적 락 → Redis Lua</text>
+    <rect x="0" y="24" width="560" height="16" rx="3" fill="#898781"/>
+    <text x="568" y="37" font-size="12" fill="#52514e">개선 전 12,042ms</text>
+    <rect x="0" y="46" width="4" height="16" rx="2" fill="#2a78d6"/>
+    <text x="12" y="59" font-size="12" font-weight="600" fill="#0b0b0b">개선 후 34ms <tspan fill="#006300">(−99.7%)</tspan></text>
+  </g>
+
+  <!-- row 2 -->
+  <g transform="translate(0,275)">
+    <text x="0" y="14" font-size="13" fill="#52514e">부하 중 p95 — GC 기본값 → heap 고정(2g)</text>
+    <rect x="0" y="24" width="560" height="16" rx="3" fill="#898781"/>
+    <text x="568" y="37" font-size="12" fill="#52514e">개선 전 158.1ms</text>
+    <rect x="0" y="46" width="9" height="16" rx="3" fill="#2a78d6"/>
+    <text x="17" y="59" font-size="12" font-weight="600" fill="#0b0b0b">개선 후 2.6ms <tspan fill="#006300">(−98.4%, GC pause 191→26회)</tspan></text>
+  </g>
+
+  <!-- row 3 -->
+  <g transform="translate(0,370)">
+    <text x="0" y="14" font-size="13" fill="#52514e">외부 API 3s 지연 시 응답 중앙값 — Tomcat(servlet) → Netty(reactive)</text>
+    <rect x="0" y="24" width="560" height="16" rx="3" fill="#898781"/>
+    <text x="568" y="37" font-size="12" fill="#52514e">개선 전 22,508ms</text>
+    <rect x="0" y="46" width="82" height="16" rx="3" fill="#2a78d6"/>
+    <text x="90" y="59" font-size="12" font-weight="600" fill="#0b0b0b">개선 후 3,276ms <tspan fill="#006300">(고유 지연 3s + ε, 드랍 2,166→0)</tspan></text>
+  </g>
+</svg>
