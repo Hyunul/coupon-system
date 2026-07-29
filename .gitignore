@@ -16,6 +16,9 @@ bin/
 *.log
 .env
 
+# Python
+__pycache__/
+
 # Load test outputs
 k6-results/
 evidence/aws/

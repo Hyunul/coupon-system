@@ -1,0 +1,37 @@
+# Reference only. Export matching TF_VAR_* values for preflight and Terraform,
+# or keep a populated var file outside the repository while exporting the same
+# values for the preflight gate. Never commit credentials, account IDs, emails,
+# or real operator/generator IPs.
+
+aws_region = "ap-northeast-2"
+owner      = "replace-with-owner-tag"
+owner_cidr = "203.0.113.10/32"
+
+# Existing validated ACM certificate and operator-managed DNS name.
+acm_certificate_arn = "arn:aws:acm:ap-northeast-2:000000000000:certificate/00000000-0000-0000-0000-000000000000"
+benchmark_hostname  = "coupon-benchmark.example.com"
+
+# Terraform assigns fixed EIPs to the Seoul and Tokyo generators automatically.
+# Add only exceptional, separately reviewed caller CIDRs here.
+additional_load_generator_cidrs = []
+
+# Generate a fresh UTC RFC3339 value no more than 12 hours ahead for each saved plan.
+expires_at          = "REPLACE_WITH_UTC_RFC3339_WITHIN_12_HOURS"
+worker_count      = 1
+db_master_username = "couponadmin"
+
+# Existing private, versioned S3 artifact location. Deployment roles receive
+# prefix-scoped access; generators may write only beneath the evidence child prefix.
+artifact_bucket_arn             = "arn:aws:s3:::replace-with-private-artifact-bucket"
+artifact_key_prefix             = "coupon-benchmark"
+generator_evidence_key_prefix   = "coupon-benchmark/evidence"
+
+mock_notify_latency_ms = 20
+mock_notify_error_rate = 0
+
+operating_budget_usd = 100
+kill_budget_usd      = 120
+absolute_budget_usd  = 200
+budget_notification_emails = [
+  "replace-with-budget-email@example.com",
+]
